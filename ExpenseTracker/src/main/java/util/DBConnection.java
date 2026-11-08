@@ -4,37 +4,32 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
-/**
- * =====================================================================
- * Member 1 Deliverable: Database Connection Utility
- * Project: Personal Expense Tracker
- * =====================================================================
- * Manages database connectivity to MySQL using MySQL Connector/J.
- */
 public class DBConnection {
 
     // JDBC Driver and Database URL
     private static final String DRIVER_CLASS = "com.mysql.cj.jdbc.Driver";
     private static final String DB_URL = "jdbc:mysql://localhost:3306/expense_tracker_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
-    
+
     // Database credentials
     private static final String DB_USER = "root";
-    
-    // TODO: Enter your MySQL password here before running the application!
-    private static final String DB_PASSWORD = "root";
+
+    // MySQL password configured
+    private static final String DB_PASSWORD = "gnims";
 
     static {
         try {
             Class.forName(DRIVER_CLASS);
         } catch (ClassNotFoundException e) {
-            throw new RuntimeException("MySQL JDBC Driver not found in classpath. Ensure mysql-connector-j JAR is in WEB-INF/lib.", e);
+            throw new RuntimeException(
+                    "MySQL JDBC Driver not found in classpath. Ensure mysql-connector-j JAR is in WEB-INF/lib.", e);
         }
     }
 
     /**
      * Private constructor to prevent instantiation of utility class.
      */
-    private DBConnection() {}
+    private DBConnection() {
+    }
 
     /**
      * Obtains a new connection to the MySQL database.
@@ -72,4 +67,3 @@ public class DBConnection {
         }
     }
 }
-

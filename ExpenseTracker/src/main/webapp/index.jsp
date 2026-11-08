@@ -2,12 +2,7 @@
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
 <%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
-<%--
- =====================================================================
- Member 5 Deliverable: Dashboard & Expense Management View
- Project: Personal Expense Tracker
- =====================================================================
---%>
+
 <%
     // If request has not been processed by ExpenseServlet, redirect to populate data
     if (request.getAttribute("expenses") == null) {

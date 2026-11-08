@@ -26,7 +26,8 @@ public class PasswordUtil {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
-    private PasswordUtil() {}
+    private PasswordUtil() {
+    }
 
     /**
      * Hashes a plaintext password using PBKDF2WithHmacSHA256.
@@ -55,7 +56,7 @@ public class PasswordUtil {
      * Uses constant-time MessageDigest.isEqual to prevent timing attacks.
      *
      * @param plainPassword candidate raw password
-     * @param storedHash formatted hash string "iterations:saltBase64:hashBase64"
+     * @param storedHash    formatted hash string "iterations:saltBase64:hashBase64"
      * @return true if password matches, false otherwise
      */
     public static boolean verifyPassword(String plainPassword, String storedHash) {
@@ -93,4 +94,3 @@ public class PasswordUtil {
         }
     }
 }
-
