@@ -18,7 +18,7 @@ A multi-user web application built with **Java Servlet, JSP, JSTL, and MySQL** f
 
 ## Technology Stack & Environment
 
-- **Server:** Apache Tomcat 10+ / 11 (uses standard `jakarta.servlet.*` namespace)
+- **Server:** Apache Tomcat 11.0.4 (uses standard `jakarta.servlet.*` namespace)
 - **Java Platform:** Java SE 17+ (Project configured for Java 25)
 - **Database:** MySQL 8.x
 - **JDBC Driver:** MySQL Connector/J 8.4.0 (`com.mysql.cj.jdbc.Driver`)
