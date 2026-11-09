@@ -27,7 +27,7 @@ public class UserDAO {
      * @return true if username exists, false otherwise
      */
     public boolean existsByUsername(String username) {
-        String sql = "SELECT id FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1";
+        String sql = "SELECT user_id FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, username);
@@ -47,7 +47,7 @@ public class UserDAO {
      * @return true if email exists, false otherwise
      */
     public boolean existsByEmail(String email) {
-        String sql = "SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1";
+        String sql = "SELECT user_id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, email);
@@ -103,7 +103,7 @@ public class UserDAO {
             return null;
         }
 
-        String sql = "SELECT id, username, email, password_hash, created_at FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1";
+        String sql = "SELECT user_id, username, email, password_hash, created_at FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, email.trim());
@@ -112,7 +112,7 @@ public class UserDAO {
                     String storedHash = rs.getString("password_hash");
                     if (PasswordUtil.verifyPassword(plainPassword, storedHash)) {
                         User user = new User();
-                        user.setId(rs.getInt("id"));
+                        user.setId(rs.getInt("user_id"));
                         user.setUsername(rs.getString("username"));
                         user.setEmail(rs.getString("email"));
                         user.setCreatedAt(rs.getTimestamp("created_at"));

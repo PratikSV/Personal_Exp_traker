@@ -16,7 +16,7 @@ USE expense_tracker_db;
 -- Stores registered user accounts with salted & hashed passwords
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- Stores user expenses linked to a specific user
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS expenses (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    expense_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     title VARCHAR(100) NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     expense_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_expenses_user
-        FOREIGN KEY (user_id) REFERENCES users(id)
+        FOREIGN KEY (user_id) REFERENCES users(user_id)
         ON DELETE CASCADE
         ON UPDATE CASCADE
 ) ENGINE=InnoDB;

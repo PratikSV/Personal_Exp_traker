@@ -64,7 +64,7 @@
             <div class="summary-card">
                 <span class="card-title">Total Spending</span>
                 <span class="card-value">
-                    $<fmt:formatNumber value="${totalSpent != null ? totalSpent : 0}" type="number" minFractionDigits="2" maxFractionDigits="2"/>
+                    ₹<fmt:formatNumber value="${totalSpent != null ? totalSpent : 0}" type="number" minFractionDigits="2" maxFractionDigits="2"/>
                 </span>
                 <span class="card-desc">All-time accumulated expenses</span>
             </div>
@@ -108,7 +108,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="amount">Amount ($)</label>
+                            <label for="amount">Amount (₹)</label>
                             <input type="number" id="amount" name="amount" class="form-control"
                                    placeholder="0.00" step="0.01" min="0.01" max="99999999.99" required>
                             <span id="amountError" class="form-error"></span>
@@ -158,7 +158,7 @@
                                             </span>
                                         </span>
                                         <span class="category-total">
-                                            $<fmt:formatNumber value="${entry.value}" type="number" minFractionDigits="2" maxFractionDigits="2"/>
+                                            ₹<fmt:formatNumber value="${entry.value}" type="number" minFractionDigits="2" maxFractionDigits="2"/>
                                         </span>
                                     </li>
                                 </c:forEach>
@@ -218,7 +218,7 @@
                                                 <fmt:formatDate value="${exp.expenseDate}" pattern="yyyy-MM-dd" />
                                             </td>
                                             <td class="amount-col">
-                                                $<fmt:formatNumber value="${exp.amount}" type="number" minFractionDigits="2" maxFractionDigits="2"/>
+                                                ₹<fmt:formatNumber value="${exp.amount}" type="number" minFractionDigits="2" maxFractionDigits="2"/>
                                             </td>
                                             <td style="text-align: center;">
                                                 <form action="${pageContext.request.contextPath}/expenses" method="POST"

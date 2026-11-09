@@ -75,10 +75,10 @@ public class ExpenseDAO {
             orderByClause = " ORDER BY category ASC, expense_date DESC";
         } else {
             // Default: sort by date descending
-            orderByClause = " ORDER BY expense_date DESC, id DESC";
+            orderByClause = " ORDER BY expense_date DESC, expense_id DESC";
         }
 
-        String sql = "SELECT id, user_id, title, amount, category, expense_date, created_at " +
+        String sql = "SELECT expense_id, user_id, title, amount, category, expense_date, created_at " +
                      "FROM expenses WHERE user_id = ?" + orderByClause;
 
         List<Expense> list = new ArrayList<>();
@@ -88,7 +88,7 @@ public class ExpenseDAO {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     Expense exp = new Expense();
-                    exp.setId(rs.getInt("id"));
+                    exp.setId(rs.getInt("expense_id"));
                     exp.setUserId(rs.getInt("user_id"));
                     exp.setTitle(rs.getString("title"));
                     exp.setAmount(rs.getBigDecimal("amount"));
@@ -113,7 +113,7 @@ public class ExpenseDAO {
      * @return true if deleted, false if not found or unauthorized
      */
     public boolean deleteExpense(int expenseId, int userId) {
-        String sql = "DELETE FROM expenses WHERE id = ? AND user_id = ?";
+        String sql = "DELETE FROM expenses WHERE expense_id = ? AND user_id = ?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, expenseId);
