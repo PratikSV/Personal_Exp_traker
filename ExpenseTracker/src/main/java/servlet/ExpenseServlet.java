@@ -23,7 +23,7 @@ import java.util.Map;
  * Member 5 Deliverable: Expense Controller Servlet
  * Project: Personal Expense Tracker
  * =====================================================================
- * Handles listing, adding, and deleting user expenses.
+ * Handles listing, adding, updating, and deleting user expenses.
  * STRICT SECURITY:
  * user_id is ALWAYS fetched from the active HttpSession, NEVER accepted
  * from client request parameters. Implements the Post-Redirect-Get (PRG) pattern.
@@ -106,6 +106,9 @@ public class ExpenseServlet extends HttpServlet {
             case "add":
                 handleAddExpense(request, response, session, userId);
                 break;
+            case "update":
+                handleUpdateExpense(request, response, session, userId);
+                break;
             case "delete":
                 handleDeleteExpense(request, response, session, userId);
                 break;
@@ -186,6 +189,81 @@ public class ExpenseServlet extends HttpServlet {
         }
 
         // Post-Redirect-Get pattern
+        response.sendRedirect(request.getContextPath() + "/expenses");
+    }
+
+    /**
+     * Updates an existing expense (title, amount, category) for the authenticated user.
+     * Always filters by userId from session — no IDOR possible.
+     */
+    private void handleUpdateExpense(HttpServletRequest request, HttpServletResponse response,
+                                     HttpSession session, int userId) throws IOException {
+        String idStr      = request.getParameter("id");
+        String title      = request.getParameter("title");
+        String amountStr  = request.getParameter("amount");
+        String category   = request.getParameter("category");
+
+        // Parse and validate expense ID
+        if (idStr == null || idStr.trim().isEmpty()) {
+            session.setAttribute("flashError", "Invalid expense ID.");
+            response.sendRedirect(request.getContextPath() + "/expenses");
+            return;
+        }
+        int expenseId;
+        try {
+            expenseId = Integer.parseInt(idStr.trim());
+        } catch (NumberFormatException e) {
+            session.setAttribute("flashError", "Expense ID must be numeric.");
+            response.sendRedirect(request.getContextPath() + "/expenses");
+            return;
+        }
+
+        // Title validation
+        title = (title != null) ? title.trim() : "";
+        if (title.isEmpty() || title.length() > 100) {
+            session.setAttribute("flashError", "Expense title is required and cannot exceed 100 characters.");
+            response.sendRedirect(request.getContextPath() + "/expenses");
+            return;
+        }
+
+        // Amount validation
+        amountStr = (amountStr != null) ? amountStr.trim() : "";
+        BigDecimal amount;
+        try {
+            amount = new BigDecimal(amountStr);
+            if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+                session.setAttribute("flashError", "Amount must be strictly greater than 0.00.");
+                response.sendRedirect(request.getContextPath() + "/expenses");
+                return;
+            }
+            if (amount.compareTo(MAX_AMOUNT) > 0) {
+                session.setAttribute("flashError", "Amount exceeds the maximum allowed limit (99,999,999.99).");
+                response.sendRedirect(request.getContextPath() + "/expenses");
+                return;
+            }
+        } catch (NumberFormatException | ArithmeticException e) {
+            session.setAttribute("flashError", "Please enter a valid numeric amount (e.g. 49.99).");
+            response.sendRedirect(request.getContextPath() + "/expenses");
+            return;
+        }
+
+        // Category validation
+        category = (category != null) ? category.trim() : "";
+        if (category.isEmpty() || category.length() > 50) {
+            session.setAttribute("flashError", "Please select a valid category.");
+            response.sendRedirect(request.getContextPath() + "/expenses");
+            return;
+        }
+
+        // Persist — DAO enforces userId ownership in WHERE clause
+        boolean updated = expenseDAO.updateExpense(expenseId, userId, title, amount, category);
+        if (updated) {
+            session.setAttribute("flashSuccess", "Expense updated successfully.");
+        } else {
+            session.setAttribute("flashError", "Expense not found or you are not authorised to edit it.");
+        }
+
+        // Post-Redirect-Get
         response.sendRedirect(request.getContextPath() + "/expenses");
     }
 

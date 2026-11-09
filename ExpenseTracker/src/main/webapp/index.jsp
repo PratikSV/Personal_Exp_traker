@@ -34,6 +34,10 @@
             <span class="user-greeting">
                 Welcome, <strong><c:out value="${sessionScope.username}" /></strong>
             </span>
+            <a href="${pageContext.request.contextPath}/profile" class="btn-profile">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                Profile
+            </a>
             <form action="${pageContext.request.contextPath}/auth" method="POST" style="display: inline;">
                 <input type="hidden" name="action" value="logout">
                 <button type="submit" class="btn-logout">Logout</button>
@@ -221,13 +225,16 @@
                                                 ₹<fmt:formatNumber value="${exp.amount}" type="number" minFractionDigits="2" maxFractionDigits="2"/>
                                             </td>
                                             <td style="text-align: center;">
-                                                <form action="${pageContext.request.contextPath}/expenses" method="POST"
-                                                      onsubmit="return confirmDelete('<c:out value="${exp.title}" />');"
-                                                      style="display: inline;">
-                                                    <input type="hidden" name="action" value="delete">
-                                                    <input type="hidden" name="id" value="<c:out value="${exp.id}" />">
-                                                    <button type="submit" class="btn-delete" title="Delete expense">Delete</button>
-                                                </form>
+                                                <button type="button" class="btn-edit"
+                                                    data-id="<c:out value='${exp.id}'/>"
+                                                    data-title="<c:out value='${exp.title}'/>"
+                                                    data-amount="${exp.amount}"
+                                                    data-category="<c:out value='${exp.category}'/>"
+                                                    onclick="openEditModal(this)"
+                                                    title="Edit expense">
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                                    Edit
+                                                </button>
                                             </td>
                                         </tr>
                                     </c:forEach>
@@ -252,6 +259,147 @@
     </main>
 
     <script src="${pageContext.request.contextPath}/js/validation.js"></script>
+
+    <!-- ================================================================
+         Edit Expense Modal (Task 1)
+         ================================================================ -->
+    <div id="editModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editModalTitle" style="display:none;">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 id="editModalTitle">Edit Expense</h3>
+                <button type="button" class="modal-close" onclick="closeEditModal()" aria-label="Close">&times;</button>
+            </div>
+
+            <!-- Edit / Save form -->
+            <form id="editExpenseForm" action="${pageContext.request.contextPath}/expenses" method="POST" novalidate>
+                <input type="hidden" name="action" value="update">
+                <input type="hidden" id="editId"   name="id">
+
+                <div class="form-group">
+                    <label for="editTitle">Expense Title</label>
+                    <input type="text" id="editTitle" name="title" class="form-control"
+                           placeholder="e.g. Grocery shopping" maxlength="100" required>
+                    <span id="editTitleError" class="form-error"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="editAmount">Amount (₹)</label>
+                    <input type="number" id="editAmount" name="amount" class="form-control"
+                           placeholder="0.00" step="0.01" min="0.01" max="99999999.99" required>
+                    <span id="editAmountError" class="form-error"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="editCategory">Category</label>
+                    <select id="editCategory" name="category" class="form-control" required>
+                        <option value="" disabled>-- Select Category --</option>
+                        <option value="Food">Food &amp; Dining</option>
+                        <option value="Transport">Transportation</option>
+                        <option value="Housing">Housing &amp; Rent</option>
+                        <option value="Utilities">Utilities &amp; Bills</option>
+                        <option value="Entertainment">Entertainment</option>
+                        <option value="Healthcare">Healthcare</option>
+                        <option value="Shopping">Shopping</option>
+                        <option value="Education">Education</option>
+                        <option value="Other">Other</option>
+                    </select>
+                    <span id="editCategoryError" class="form-error"></span>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="submit" class="btn-primary" style="width:auto; padding:0.5rem 1.25rem;">Save Changes</button>
+                    <button type="button" class="btn-modal-delete" onclick="submitDeleteFromModal()">Delete</button>
+                    <button type="button" class="btn-modal-cancel" onclick="closeEditModal()">Cancel</button>
+                </div>
+            </form>
+
+            <!-- Hidden delete form (POST action=delete) -->
+            <form id="deleteFromModalForm" action="${pageContext.request.contextPath}/expenses" method="POST" style="display:none;">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" id="deleteModalId" name="id">
+            </form>
+        </div>
+    </div>
+
+    <script>
+    // ---- Edit modal helpers ----
+    function openEditModal(btn) {
+        var id       = btn.getAttribute("data-id");
+        var title    = btn.getAttribute("data-title");
+        var amount   = btn.getAttribute("data-amount");
+        var category = btn.getAttribute("data-category");
+
+        document.getElementById("editId").value       = id;
+        document.getElementById("editTitle").value    = title;
+        document.getElementById("editAmount").value   = amount;
+        document.getElementById("deleteModalId").value = id;
+
+        var sel = document.getElementById("editCategory");
+        sel.value = category;
+        if (!sel.value) sel.value = ""; // fallback if unknown category
+
+        // Clear any previous errors
+        ["editTitleError","editAmountError","editCategoryError"].forEach(function(e){
+            var el = document.getElementById(e);
+            if (el) { el.textContent = ""; el.style.display = "none"; }
+        });
+
+        document.getElementById("editModal").style.display = "flex";
+        document.getElementById("editTitle").focus();
+    }
+
+    function closeEditModal() {
+        document.getElementById("editModal").style.display = "none";
+    }
+
+    function submitDeleteFromModal() {
+        var title = document.getElementById("editTitle").value || "this expense";
+        if (confirm("Delete \"" + title + "\"? This action cannot be undone.")) {
+            document.getElementById("deleteFromModalForm").submit();
+        }
+    }
+
+    // Client-side validation for edit form
+    document.getElementById("editExpenseForm").addEventListener("submit", function(e) {
+        var valid = true;
+        var title  = document.getElementById("editTitle").value.trim();
+        var amount = parseFloat(document.getElementById("editAmount").value);
+        var cat    = document.getElementById("editCategory").value;
+
+        ["editTitleError","editAmountError","editCategoryError"].forEach(function(id){
+            var el = document.getElementById(id);
+            if (el) { el.textContent = ""; el.style.display = "none"; }
+        });
+
+        if (!title || title.length > 100) {
+            showModalError("editTitleError", "Title is required (max 100 characters)."); valid = false;
+        }
+        if (isNaN(amount) || amount <= 0) {
+            showModalError("editAmountError", "Amount must be a positive number greater than 0."); valid = false;
+        } else if (amount > 99999999.99) {
+            showModalError("editAmountError", "Amount exceeds maximum limit."); valid = false;
+        }
+        if (!cat) {
+            showModalError("editCategoryError", "Please select a category."); valid = false;
+        }
+        if (!valid) e.preventDefault();
+    });
+
+    function showModalError(id, msg) {
+        var el = document.getElementById(id);
+        if (el) { el.textContent = msg; el.style.display = "block"; }
+    }
+
+    // Close on ESC key
+    document.addEventListener("keydown", function(e) {
+        if (e.key === "Escape") closeEditModal();
+    });
+
+    // Close on backdrop click
+    document.getElementById("editModal").addEventListener("click", function(e) {
+        if (e.target === this) closeEditModal();
+    });
+    </script>
 </body>
 </html>
 

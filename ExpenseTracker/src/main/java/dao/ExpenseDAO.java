@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
 
 /**
  * =====================================================================
@@ -171,6 +172,219 @@ public class ExpenseDAO {
             }
         } catch (SQLException e) {
             System.err.println("ExpenseDAO.getCategoryTotals error: " + e.getMessage());
+        }
+        return map;
+    }
+
+    /**
+     * Updates an expense record ONLY if it belongs to the authenticated user.
+     * Prevents unauthorized modification (IDOR protection).
+     *
+     * @param expenseId ID of the expense to update
+     * @param userId    ID of the current logged-in user
+     * @param title     new title (non-empty, max 100 chars)
+     * @param amount    new amount (> 0)
+     * @param category  new category (non-empty)
+     * @return true if updated, false if not found or unauthorized
+     */
+    public boolean updateExpense(int expenseId, int userId, String title, BigDecimal amount, String category) {
+        String sql = "UPDATE expenses SET title = ?, amount = ?, category = ? " +
+                     "WHERE expense_id = ? AND user_id = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, title);
+            ps.setBigDecimal(2, amount);
+            ps.setString(3, category);
+            ps.setInt(4, expenseId);
+            ps.setInt(5, userId);
+
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            System.err.println("ExpenseDAO.updateExpense error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // =====================================================================
+    // Profile / Analytics DAO Methods (Task 2)
+    // =====================================================================
+
+    /**
+     * Returns all distinct years that have expense records for this user.
+     * Used to populate the Year filter dropdown in the Profile view.
+     */
+    public List<Integer> getExpenseYears(int userId) {
+        String sql = "SELECT DISTINCT YEAR(expense_date) AS yr FROM expenses " +
+                     "WHERE user_id = ? ORDER BY yr DESC";
+        List<Integer> years = new ArrayList<>();
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) years.add(rs.getInt("yr"));
+            }
+        } catch (SQLException e) {
+            System.err.println("ExpenseDAO.getExpenseYears error: " + e.getMessage());
+        }
+        return years;
+    }
+
+    /**
+     * Returns all distinct categories used by this user.
+     * Used to populate the Category filter dropdown in the Profile view.
+     */
+    public List<String> getUserCategories(int userId) {
+        String sql = "SELECT DISTINCT category FROM expenses WHERE user_id = ? ORDER BY category ASC";
+        List<String> cats = new ArrayList<>();
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) cats.add(rs.getString("category"));
+            }
+        } catch (SQLException e) {
+            System.err.println("ExpenseDAO.getUserCategories error: " + e.getMessage());
+        }
+        return cats;
+    }
+
+    /**
+     * Retrieves filtered expenses for the Profile page.
+     * Filters are optional — pass null or 0 / empty string to skip a filter.
+     * Uses a whitelist for ordering and PreparedStatement for all values.
+     *
+     * @param userId   authenticated user (always applied)
+     * @param year     calendar year filter, 0 = all
+     * @param month    month 1-12, 0 = all
+     * @param day      day of month 1-31, 0 = all
+     * @param category category name, null/empty = all
+     * @return list of matching expenses, sorted date desc
+     */
+    public List<Expense> getExpensesByFilter(int userId, int year, int month, int day, String category) {
+        StringBuilder sb = new StringBuilder(
+            "SELECT expense_id, user_id, title, amount, category, expense_date, created_at " +
+            "FROM expenses WHERE user_id = ?");
+
+        List<Object> params = new ArrayList<>();
+        params.add(userId);
+
+        if (year > 0) {
+            sb.append(" AND YEAR(expense_date) = ?");
+            params.add(year);
+        }
+        if (month > 0) {
+            sb.append(" AND MONTH(expense_date) = ?");
+            params.add(month);
+        }
+        if (day > 0) {
+            sb.append(" AND DAY(expense_date) = ?");
+            params.add(day);
+        }
+        if (category != null && !category.trim().isEmpty()) {
+            sb.append(" AND category = ?");
+            params.add(category.trim());
+        }
+        sb.append(" ORDER BY expense_date DESC, expense_id DESC");
+
+        List<Expense> list = new ArrayList<>();
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sb.toString())) {
+
+            for (int i = 0; i < params.size(); i++) {
+                Object v = params.get(i);
+                if (v instanceof Integer) ps.setInt(i + 1, (Integer) v);
+                else ps.setString(i + 1, (String) v);
+            }
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Expense exp = new Expense();
+                    exp.setId(rs.getInt("expense_id"));
+                    exp.setUserId(rs.getInt("user_id"));
+                    exp.setTitle(rs.getString("title"));
+                    exp.setAmount(rs.getBigDecimal("amount"));
+                    exp.setCategory(rs.getString("category"));
+                    exp.setExpenseDate(rs.getDate("expense_date"));
+                    exp.setCreatedAt(rs.getTimestamp("created_at"));
+                    list.add(exp);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("ExpenseDAO.getExpensesByFilter error: " + e.getMessage());
+        }
+        return list;
+    }
+
+    /**
+     * Returns spending grouped by category for the filtered data set.
+     * Same optional filters as getExpensesByFilter.
+     */
+    public Map<String, BigDecimal> getCategorySummary(int userId, int year, int month, int day, String category) {
+        StringBuilder sb = new StringBuilder(
+            "SELECT category, COALESCE(SUM(amount), 0) AS cat_total " +
+            "FROM expenses WHERE user_id = ?");
+
+        List<Object> params = new ArrayList<>();
+        params.add(userId);
+
+        if (year > 0) { sb.append(" AND YEAR(expense_date) = ?"); params.add(year); }
+        if (month > 0) { sb.append(" AND MONTH(expense_date) = ?"); params.add(month); }
+        if (day > 0) { sb.append(" AND DAY(expense_date) = ?"); params.add(day); }
+        if (category != null && !category.trim().isEmpty()) {
+            sb.append(" AND category = ?"); params.add(category.trim());
+        }
+        sb.append(" GROUP BY category ORDER BY cat_total DESC");
+
+        Map<String, BigDecimal> map = new LinkedHashMap<>();
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sb.toString())) {
+            for (int i = 0; i < params.size(); i++) {
+                Object v = params.get(i);
+                if (v instanceof Integer) ps.setInt(i + 1, (Integer) v);
+                else ps.setString(i + 1, (String) v);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) map.put(rs.getString("category"), rs.getBigDecimal("cat_total"));
+            }
+        } catch (SQLException e) {
+            System.err.println("ExpenseDAO.getCategorySummary error: " + e.getMessage());
+        }
+        return map;
+    }
+
+    /**
+     * Returns spending grouped by month (1-12) for a given year filter.
+     * Returns a map of month-number -> total (all 12 slots, 0 if no data).
+     */
+    public Map<Integer, BigDecimal> getMonthlySummary(int userId, int year, String category) {
+        // Initialise all months to zero so charts always have 12 data points
+        Map<Integer, BigDecimal> map = new LinkedHashMap<>();
+        for (int m = 1; m <= 12; m++) map.put(m, BigDecimal.ZERO);
+
+        StringBuilder sb = new StringBuilder(
+            "SELECT MONTH(expense_date) AS mo, COALESCE(SUM(amount), 0) AS mo_total " +
+            "FROM expenses WHERE user_id = ?");
+
+        List<Object> params = new ArrayList<>();
+        params.add(userId);
+        if (year > 0) { sb.append(" AND YEAR(expense_date) = ?"); params.add(year); }
+        if (category != null && !category.trim().isEmpty()) {
+            sb.append(" AND category = ?"); params.add(category.trim());
+        }
+        sb.append(" GROUP BY MONTH(expense_date) ORDER BY mo ASC");
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sb.toString())) {
+            for (int i = 0; i < params.size(); i++) {
+                Object v = params.get(i);
+                if (v instanceof Integer) ps.setInt(i + 1, (Integer) v);
+                else ps.setString(i + 1, (String) v);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) map.put(rs.getInt("mo"), rs.getBigDecimal("mo_total"));
+            }
+        } catch (SQLException e) {
+            System.err.println("ExpenseDAO.getMonthlySummary error: " + e.getMessage());
         }
         return map;
     }

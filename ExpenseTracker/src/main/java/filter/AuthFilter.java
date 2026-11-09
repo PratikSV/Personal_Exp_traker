@@ -58,9 +58,9 @@ public class AuthFilter implements Filter {
                                    path.endsWith(".jpg") ||
                                    path.endsWith(".ico");
 
-        boolean isAuthEndpoint = path.equals("/auth") || path.startsWith("/auth/");
-        boolean isLoginPage = path.equals("/login.jsp") || path.equals("/login");
-        boolean isRegisterPage = path.equals("/register.jsp") || path.equals("/register");
+        boolean isAuthEndpoint  = path.equals("/auth") || path.startsWith("/auth/");
+        boolean isLoginPage     = path.equals("/login.jsp") || path.equals("/login");
+        boolean isRegisterPage  = path.equals("/register.jsp") || path.equals("/register");
 
         // Allow static assets always
         if (isStaticResource) {
