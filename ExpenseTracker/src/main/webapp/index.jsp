@@ -34,7 +34,7 @@
             <span class="user-greeting">
                 Welcome, <strong><c:out value="${sessionScope.username}" /></strong>
             </span>
-            <a href="${pageContext.request.contextPath}/profile" class="btn-profile">
+            <a href="${pageContext.request.contextPath}/profile" class="btn-profile nav-link">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
                 Profile
             </a>
@@ -261,66 +261,9 @@
     <script src="${pageContext.request.contextPath}/js/validation.js"></script>
 
     <!-- ================================================================
-         Edit Expense Modal (Task 1)
+         Edit Expense Modal
          ================================================================ -->
-    <div id="editModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editModalTitle" style="display:none;">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h3 id="editModalTitle">Edit Expense</h3>
-                <button type="button" class="modal-close" onclick="closeEditModal()" aria-label="Close">&times;</button>
-            </div>
-
-            <!-- Edit / Save form -->
-            <form id="editExpenseForm" action="${pageContext.request.contextPath}/expenses" method="POST" novalidate>
-                <input type="hidden" name="action" value="update">
-                <input type="hidden" id="editId"   name="id">
-
-                <div class="form-group">
-                    <label for="editTitle">Expense Title</label>
-                    <input type="text" id="editTitle" name="title" class="form-control"
-                           placeholder="e.g. Grocery shopping" maxlength="100" required>
-                    <span id="editTitleError" class="form-error"></span>
-                </div>
-
-                <div class="form-group">
-                    <label for="editAmount">Amount (₹)</label>
-                    <input type="number" id="editAmount" name="amount" class="form-control"
-                           placeholder="0.00" step="0.01" min="0.01" max="99999999.99" required>
-                    <span id="editAmountError" class="form-error"></span>
-                </div>
-
-                <div class="form-group">
-                    <label for="editCategory">Category</label>
-                    <select id="editCategory" name="category" class="form-control" required>
-                        <option value="" disabled>-- Select Category --</option>
-                        <option value="Food">Food &amp; Dining</option>
-                        <option value="Transport">Transportation</option>
-                        <option value="Housing">Housing &amp; Rent</option>
-                        <option value="Utilities">Utilities &amp; Bills</option>
-                        <option value="Entertainment">Entertainment</option>
-                        <option value="Healthcare">Healthcare</option>
-                        <option value="Shopping">Shopping</option>
-                        <option value="Education">Education</option>
-                        <option value="Other">Other</option>
-                    </select>
-                    <span id="editCategoryError" class="form-error"></span>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="submit" class="btn-primary" style="width:auto; padding:0.5rem 1.25rem;">Save Changes</button>
-                    <button type="button" class="btn-modal-delete" onclick="submitDeleteFromModal()">Delete</button>
-                    <button type="button" class="btn-modal-cancel" onclick="closeEditModal()">Cancel</button>
-                </div>
-            </form>
-
-            <!-- Hidden delete form (POST action=delete) -->
-            <form id="deleteFromModalForm" action="${pageContext.request.contextPath}/expenses" method="POST" style="display:none;">
-                <input type="hidden" name="action" value="delete">
-                <input type="hidden" id="deleteModalId" name="id">
-            </form>
-        </div>
-    </div>
-
+  
     <script>
     // ---- Edit modal helpers ----
     function openEditModal(btn) {
@@ -329,10 +272,10 @@
         var amount   = btn.getAttribute("data-amount");
         var category = btn.getAttribute("data-category");
 
-        document.getElementById("editId").value       = id;
-        document.getElementById("editTitle").value    = title;
-        document.getElementById("editAmount").value   = amount;
-        document.getElementById("deleteModalId").value = id;
+        document.getElementById("editId").value          = id;
+        document.getElementById("editTitleInput").value  = title;
+        document.getElementById("editAmount").value      = amount;
+        document.getElementById("deleteModalId").value   = id;
 
         var sel = document.getElementById("editCategory");
         sel.value = category;
@@ -344,25 +287,46 @@
             if (el) { el.textContent = ""; el.style.display = "none"; }
         });
 
-        document.getElementById("editModal").style.display = "flex";
-        document.getElementById("editTitle").focus();
+        var modal = document.getElementById("editModal");
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+        document.getElementById("editAmount").focus();
     }
 
     function closeEditModal() {
-        document.getElementById("editModal").style.display = "none";
+        var modal = document.getElementById("editModal");
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+        document.getElementById("editForm").reset();
     }
 
-    function submitDeleteFromModal() {
-        var title = document.getElementById("editTitle").value || "this expense";
-        if (confirm("Delete \"" + title + "\"? This action cannot be undone.")) {
+    // ---- Modal event listeners ----
+    document.getElementById("editCloseBtn").addEventListener("click", closeEditModal);
+    document.getElementById("editCancelBtn").addEventListener("click", closeEditModal);
+
+    // Close on backdrop click (only when the overlay itself is clicked)
+    document.getElementById("editModal").addEventListener("click", function(e) {
+        if (e.target === this) closeEditModal();
+    });
+
+    // Close on ESC key
+    document.addEventListener("keydown", function(e) {
+        if (e.key === "Escape") closeEditModal();
+    });
+
+    // Delete button -> confirm, then POST to existing delete endpoint
+    document.getElementById("editDeleteBtn").addEventListener("click", function() {
+        if (confirm("Delete this expense?")) {
             document.getElementById("deleteFromModalForm").submit();
         }
-    }
+    });
 
     // Client-side validation for edit form
-    document.getElementById("editExpenseForm").addEventListener("submit", function(e) {
+    document.getElementById("editForm").addEventListener("submit", function(e) {
         var valid = true;
-        var title  = document.getElementById("editTitle").value.trim();
+        var title  = document.getElementById("editTitleInput").value.trim();
         var amount = parseFloat(document.getElementById("editAmount").value);
         var cat    = document.getElementById("editCategory").value;
 
@@ -389,16 +353,6 @@
         var el = document.getElementById(id);
         if (el) { el.textContent = msg; el.style.display = "block"; }
     }
-
-    // Close on ESC key
-    document.addEventListener("keydown", function(e) {
-        if (e.key === "Escape") closeEditModal();
-    });
-
-    // Close on backdrop click
-    document.getElementById("editModal").addEventListener("click", function(e) {
-        if (e.target === this) closeEditModal();
-    });
     </script>
 </body>
 </html>

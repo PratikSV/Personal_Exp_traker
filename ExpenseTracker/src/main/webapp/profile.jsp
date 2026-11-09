@@ -13,6 +13,24 @@
         response.sendRedirect(request.getContextPath() + "/login.jsp");
         return;
     }
+
+    // Derive top spending category from categoryData map for the stat card
+    String topCategory = "—";
+    Object cd = request.getAttribute("categoryData");
+    if (cd instanceof java.util.Map) {
+        java.util.Map<?, ?> catMap = (java.util.Map<?, ?>) cd;
+        java.math.BigDecimal maxVal = null;
+        String topKey = null;
+        for (java.util.Map.Entry<?, ?> e : catMap.entrySet()) {
+            java.math.BigDecimal v = (java.math.BigDecimal) e.getValue();
+            if (topKey == null || (maxVal != null && v.compareTo(maxVal) > 0)) {
+                maxVal = v;
+                topKey = (String) e.getKey();
+            }
+        }
+        if (topKey != null) topCategory = topKey;
+    }
+    request.setAttribute("topCategory", topCategory);
 %>
 <!DOCTYPE html>
 <html lang="en">
@@ -40,7 +58,7 @@
             <span class="user-greeting">
                 Welcome, <strong><c:out value="${sessionScope.username}" /></strong>
             </span>
-            <a href="${pageContext.request.contextPath}/expenses" class="btn-profile">Dashboard</a>
+            <a href="${pageContext.request.contextPath}/expenses" class="nav-link">Dashboard</a>
             <form action="${pageContext.request.contextPath}/auth" method="POST" style="display:inline;">
                 <input type="hidden" name="action" value="logout">
                 <button type="submit" class="btn-logout">Logout</button>
@@ -48,14 +66,16 @@
         </div>
     </header>
 
-    <main class="container">
+    <main class="container profile-container">
+
+        <h1 class="page-title">Profile &amp; Analytics</h1>
 
         <!-- ============================================================
              User Info Card
              ============================================================ -->
         <div class="profile-info-card">
             <div class="profile-avatar">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                <c:out value="${fn:toUpperCase(fn:substring(sessionScope.username, 0, 1))}" />
             </div>
             <div class="profile-info-text">
                 <h2><c:out value="${sessionScope.username}" /></h2>
@@ -64,11 +84,15 @@
             <div class="profile-stats">
                 <div class="profile-stat">
                     <span class="profile-stat-value"><c:out value="${fn:length(filteredExpenses)}" /></span>
-                    <span class="profile-stat-label">Records (filtered)</span>
+                    <span class="profile-stat-label">Total Records</span>
                 </div>
                 <div class="profile-stat">
                     <span class="profile-stat-value">₹<fmt:formatNumber value="${totalFiltered}" type="number" minFractionDigits="2" maxFractionDigits="2"/></span>
-                    <span class="profile-stat-label">Total Spent (filtered)</span>
+                    <span class="profile-stat-label">Total Spent</span>
+                </div>
+                <div class="profile-stat">
+                    <span class="profile-stat-value"><c:out value="${topCategory}" /></span>
+                    <span class="profile-stat-label">Top Category</span>
                 </div>
             </div>
         </div>
@@ -78,7 +102,10 @@
              ============================================================ -->
         <div class="card">
             <div class="card-header-flex">
-                <h2 class="card-heading">Filters</h2>
+                <h2 class="card-heading">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:6px; color:var(--primary-color);"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                    Filters
+                </h2>
             </div>
             <form id="filterForm" action="${pageContext.request.contextPath}/profile" method="GET" class="filter-form">
                 <!-- Year -->
@@ -132,8 +159,8 @@
                 </div>
                 <!-- Buttons -->
                 <div class="filter-group filter-actions">
-                    <button type="submit" class="btn-primary" style="width:auto; padding:0.55rem 1.25rem;">Apply</button>
-                    <a href="${pageContext.request.contextPath}/profile" class="btn-modal-cancel" style="text-decoration:none; padding:0.55rem 1.1rem;">Reset</a>
+                    <button type="submit" class="btn-primary">Apply</button>
+                    <a href="${pageContext.request.contextPath}/profile" class="btn-reset">Reset</a>
                 </div>
             </form>
         </div>
@@ -164,10 +191,15 @@
                     </div>
                     <c:choose>
                         <c:when test="${fn:length(categoryData) == 0}">
-                            <div class="empty-state"><p>No data for selected filters.</p></div>
+                            <div class="chart-empty">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                                <span>No data for selected filters</span>
+                            </div>
                         </c:when>
                         <c:otherwise>
-                            <canvas id="pieChart" height="260"></canvas>
+                            <div class="chart-wrap">
+                                <canvas id="pieChart"></canvas>
+                            </div>
                         </c:otherwise>
                     </c:choose>
                 </div>
@@ -178,7 +210,13 @@
                             <c:if test="${not empty filterYear}"> – ${filterYear}</c:if>
                         </h2>
                     </div>
-                    <canvas id="barChart" height="260"></canvas>
+                    <div class="chart-wrap" id="barWrap">
+                        <canvas id="barChart"></canvas>
+                    </div>
+                    <div class="chart-empty" id="barEmpty" style="display:none;">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                        <span>No data for selected filters</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -212,7 +250,7 @@
                                         <tr>
                                             <td><fmt:formatDate value="${exp.expenseDate}" pattern="yyyy-MM-dd"/></td>
                                             <td>
-                                                <span class="badge badge-${fn:toLowerCase(exp.category)}">
+                                                <span class="cat-pill">
                                                     <c:out value="${exp.category}"/>
                                                 </span>
                                             </td>
@@ -247,13 +285,20 @@
 
     </main>
 
+    <script type="application/json" id="catLabelsJson">${catLabelsJson}</script>
+    <script type="application/json" id="catValuesJson">${catValuesJson}</script>
+    <script type="application/json" id="monthValuesJson">${monthValuesJson}</script>
+
     <script>
     // ================================================================
     // Chart data injected from servlet (already JSON-safe strings)
     // ================================================================
-    var catLabels  = ${catLabelsJson};
-    var catValues  = ${catValuesJson};
-    var monthVals  = ${monthValuesJson};
+    function jsonEl(id) {
+        return JSON.parse(document.getElementById(id).textContent);
+    }
+    var catLabels  = jsonEl("catLabelsJson");
+    var catValues  = jsonEl("catValuesJson");
+    var monthVals  = jsonEl("monthValuesJson");
     var monthLabels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
     var BADGE_COLORS = {
@@ -292,6 +337,8 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                cutout: "60%",
                 plugins: {
                     legend: { position: "bottom", labels: { font: { size: 12 }, padding: 16 } },
                     tooltip: {
@@ -308,7 +355,14 @@
 
     // ---- Bar chart (monthly) ----
     var barCtx = document.getElementById("barChart");
-    if (barCtx) {
+    var barWrap = document.getElementById("barWrap");
+    var barEmpty = document.getElementById("barEmpty");
+    var hasMonthlyData = monthVals.some(function(v) { return parseFloat(v) > 0; });
+    if (!hasMonthlyData && barWrap && barEmpty) {
+        barWrap.style.display = "none";
+        barEmpty.style.display = "flex";
+    }
+    if (barCtx && hasMonthlyData) {
         new Chart(barCtx.getContext("2d"), {
             type: "bar",
             data: {
@@ -322,6 +376,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -412,13 +467,13 @@
             b.onclick = function() { currentPage = page; renderPage(); };
             return b;
         }
-        pag.appendChild(mkBtn("«", 1, currentPage === 1));
+        pag.appendChild(mkBtn("Prev", 1, currentPage === 1));
         pag.appendChild(mkBtn("‹", currentPage-1, currentPage === 1));
         for (var p = Math.max(1, currentPage-2); p <= Math.min(pages, currentPage+2); p++) {
             pag.appendChild(mkBtn(p, p, false));
         }
         pag.appendChild(mkBtn("›", currentPage+1, currentPage === pages));
-        pag.appendChild(mkBtn("»", pages, currentPage === pages));
+        pag.appendChild(mkBtn("Next", pages, currentPage === pages));
     }
 
     // Initialise pagination on page load
