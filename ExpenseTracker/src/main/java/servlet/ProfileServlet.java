@@ -1,7 +1,9 @@
 package servlet;
 
 import dao.ExpenseDAO;
+import dao.UserDAO;
 import model.Expense;
+import model.User;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -12,45 +14,34 @@ import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 
 /**
- * =====================================================================
- * Task 2 – Profile & Analytics Controller
- * Project: Personal Expense Tracker
- * =====================================================================
- * Reads optional filter params (year, month, day, category), delegates
- * to ExpenseDAO, then forwards to profile.jsp with:
- *   - filteredExpenses   : List<Expense>
- *   - categoryData       : Map<String,BigDecimal>  (for Pie chart)
- *   - monthlyData        : Map<Integer,BigDecimal> (for Bar chart, 12 slots)
- *   - totalFiltered      : BigDecimal
- *   - allYears           : List<Integer>
- *   - allCategories      : List<String>
- *   - filter.*           : echoed back so the form remembers selections
- *
- * No JSON library is used — chart data is serialised to JSON strings
- * manually (simple numeric/string values only, XSS-safe).
+ * Profile & Analytics Controller Servlet.
+ * Fetches user profile, filtered expenses, summary stats, and chart data.
  */
 @WebServlet("/profile")
 public class ProfileServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
     private ExpenseDAO expenseDAO;
+    private UserDAO userDAO;
 
     @Override
     public void init() throws ServletException {
         super.init();
         this.expenseDAO = new ExpenseDAO();
+        this.userDAO = new UserDAO();
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        // ---- Auth guard ----
+        // 1. Session / Auth guard
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("user_id") == null) {
             response.sendRedirect(request.getContextPath() + "/login.jsp");
@@ -59,106 +50,156 @@ public class ProfileServlet extends HttpServlet {
 
         int userId = (Integer) session.getAttribute("user_id");
 
-        // ---- Parse filter params (all optional) ----
-        int year     = parseIntParam(request.getParameter("year"),  0);
-        int month    = parseIntParam(request.getParameter("month"), 0);
-        int day      = parseIntParam(request.getParameter("day"),   0);
-        String category = request.getParameter("category");
-        if (category != null && category.trim().isEmpty()) category = null;
+        // 2. Read filter parameters ("" or "all" = no restriction)
+        int year = parseFilterInt(request.getParameter("year"));
+        int month = parseFilterInt(request.getParameter("month"));
+        int day = parseFilterInt(request.getParameter("day"));
+        String category = parseFilterString(request.getParameter("category"));
 
-        // ---- DAO calls ----
-        List<Expense> expenses = expenseDAO.getExpensesByFilter(userId, year, month, day, category);
-        Map<String, BigDecimal> catData     = expenseDAO.getCategorySummary(userId, year, month, day, category);
-        Map<Integer, BigDecimal> monthlyData = expenseDAO.getMonthlySummary(userId, year, category);
-        Map<Integer, BigDecimal> dailyData   = expenseDAO.getDailySummary(userId, year, month, category);
-        List<Integer> allYears              = expenseDAO.getExpenseYears(userId);
-        List<String>  allCategories         = expenseDAO.getUserCategories(userId);
-
-        // ---- Compute total for filtered set ----
-        BigDecimal total = BigDecimal.ZERO;
-        for (Expense e : expenses) total = total.add(e.getAmount());
-
-        // ---- Build JSON strings for Chart.js (manual, no library) ----
-        // Category pie: { labels:[...], data:[...] }
-        StringBuilder catLabels = new StringBuilder("[");
-        StringBuilder catValues = new StringBuilder("[");
-        boolean first = true;
-        for (Map.Entry<String, BigDecimal> e : catData.entrySet()) {
-            if (!first) { catLabels.append(","); catValues.append(","); }
-            catLabels.append("\"").append(escapeJson(e.getKey())).append("\"");
-            catValues.append(e.getValue().toPlainString());
-            first = false;
+        // 3. Query database via DAOs
+        User profileUser = userDAO.getUserById(userId);
+        if (profileUser == null) {
+            // Fallback to session info if DB query failed
+            profileUser = new User();
+            profileUser.setId(userId);
+            profileUser.setUsername((String) session.getAttribute("username"));
+            profileUser.setEmail((String) session.getAttribute("email"));
         }
-        catLabels.append("]");
-        catValues.append("]");
 
-        // Bar chart: grouped by day when a month is selected, otherwise by month.
-        // Labels and values are emitted as parallel JSON arrays.
-        StringBuilder barLabels = new StringBuilder("[");
-        StringBuilder barValues = new StringBuilder("[");
+        List<Expense> expenses = expenseDAO.getExpensesByFilter(userId, year, month, day, category);
+        Map<String, BigDecimal> categoryTotals = expenseDAO.getCategoryTotals(userId, year, month, day, category);
+        Map<Integer, BigDecimal> monthlyTotals = expenseDAO.getMonthlyTotals(userId, year, category);
+        Map<Integer, BigDecimal> dailyTotals = expenseDAO.getDailyTotals(userId, year, month, category);
+        List<Integer> distinctYears = expenseDAO.getDistinctYears(userId);
+        List<String> distinctCategories = expenseDAO.getDistinctCategories(userId);
+
+        // 4. Compute statistics
+        int totalRecords = expenses.size();
+        BigDecimal totalSpent = BigDecimal.ZERO;
+        for (Expense exp : expenses) {
+            if (exp.getAmount() != null) {
+                totalSpent = totalSpent.add(exp.getAmount());
+            }
+        }
+
+        String topCategory = "-";
+        BigDecimal maxCategoryAmount = BigDecimal.ZERO;
+        for (Map.Entry<String, BigDecimal> entry : categoryTotals.entrySet()) {
+            if (entry.getValue() != null && entry.getValue().compareTo(maxCategoryAmount) > 0) {
+                maxCategoryAmount = entry.getValue();
+                topCategory = entry.getKey();
+            }
+        }
+
+        // Compute single letter avatar initial
+        String userName = profileUser.getUsername();
+        String userInitial = (userName != null && !userName.trim().isEmpty())
+                ? String.valueOf(Character.toUpperCase(userName.trim().charAt(0)))
+                : "U";
+
+        // 5. Build JSON data for Chart.js safely by hand
+        StringBuilder catLabelsJson = new StringBuilder("[");
+        StringBuilder catValuesJson = new StringBuilder("[");
+        boolean firstCat = true;
+        for (Map.Entry<String, BigDecimal> entry : categoryTotals.entrySet()) {
+            if (!firstCat) {
+                catLabelsJson.append(",");
+                catValuesJson.append(",");
+            }
+            catLabelsJson.append("\"").append(escapeJson(entry.getKey())).append("\"");
+            BigDecimal val = entry.getValue() != null ? entry.getValue() : BigDecimal.ZERO;
+            catValuesJson.append(val.setScale(2, RoundingMode.HALF_UP).toPlainString());
+            firstCat = false;
+        }
+        catLabelsJson.append("]");
+        catValuesJson.append("]");
+
+        StringBuilder barLabelsJson = new StringBuilder("[");
+        StringBuilder barValuesJson = new StringBuilder("[");
         String barTitle;
+
         if (month > 0) {
             barTitle = "By Day";
-            int maxDay = (year > 0)
-                    ? YearMonth.of(year, month).lengthOfMonth()
-                    : 31;
-            for (int d = 1; d <= maxDay; d++) {
-                if (d > 1) { barLabels.append(","); barValues.append(","); }
-                barLabels.append("\"").append(d).append("\"");
-                barValues.append(dailyData.getOrDefault(d, BigDecimal.ZERO).toPlainString());
+            int maxDays = (year > 0) ? YearMonth.of(year, month).lengthOfMonth() : 31;
+            for (int d = 1; d <= maxDays; d++) {
+                if (d > 1) {
+                    barLabelsJson.append(",");
+                    barValuesJson.append(",");
+                }
+                barLabelsJson.append("\"").append(d).append("\"");
+                BigDecimal val = dailyTotals.getOrDefault(d, BigDecimal.ZERO);
+                barValuesJson.append(val.setScale(2, RoundingMode.HALF_UP).toPlainString());
             }
         } else {
             barTitle = "By Month";
-            String[] monthNames = {"Jan","Feb","Mar","Apr","May","Jun",
-                                   "Jul","Aug","Sep","Oct","Nov","Dec"};
+            String[] monthNames = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
             for (int m = 1; m <= 12; m++) {
-                if (m > 1) { barLabels.append(","); barValues.append(","); }
-                barLabels.append("\"").append(monthNames[m - 1]).append("\"");
-                barValues.append(monthlyData.getOrDefault(m, BigDecimal.ZERO).toPlainString());
+                if (m > 1) {
+                    barLabelsJson.append(",");
+                    barValuesJson.append(",");
+                }
+                barLabelsJson.append("\"").append(monthNames[m - 1]).append("\"");
+                BigDecimal val = monthlyTotals.getOrDefault(m, BigDecimal.ZERO);
+                barValuesJson.append(val.setScale(2, RoundingMode.HALF_UP).toPlainString());
             }
         }
-        barLabels.append("]");
-        barValues.append("]");
+        barLabelsJson.append("]");
+        barValuesJson.append("]");
 
-        // ---- Set request attributes ----
+        // 6. Set request attributes
+        request.setAttribute("profileUser", profileUser);
+        request.setAttribute("userInitial", userInitial);
         request.setAttribute("filteredExpenses", expenses);
-        request.setAttribute("categoryData",    catData);
-        request.setAttribute("totalFiltered",   total);
-        request.setAttribute("allYears",        allYears);
-        request.setAttribute("allCategories",   allCategories);
+        request.setAttribute("totalRecords", totalRecords);
+        request.setAttribute("totalSpent", totalSpent);
+        request.setAttribute("topCategory", topCategory);
 
-        // Echo filters back to view for pre-selecting dropdowns
-        request.setAttribute("filterYear",     year > 0  ? String.valueOf(year)  : "");
-        request.setAttribute("filterMonth",    month > 0 ? String.valueOf(month) : "");
-        request.setAttribute("filterDay",      day > 0   ? String.valueOf(day)   : "");
+        request.setAttribute("allYears", distinctYears);
+        request.setAttribute("allCategories", distinctCategories);
+
+        request.setAttribute("filterYear", year > 0 ? String.valueOf(year) : "");
+        request.setAttribute("filterMonth", month > 0 ? String.valueOf(month) : "");
+        request.setAttribute("filterDay", day > 0 ? String.valueOf(day) : "");
         request.setAttribute("filterCategory", category != null ? category : "");
 
-        // JSON for charts
-        request.setAttribute("catLabelsJson",  catLabels.toString());
-        request.setAttribute("catValuesJson",  catValues.toString());
-        request.setAttribute("barLabelsJson",  barLabels.toString());
-        request.setAttribute("barValuesJson",  barValues.toString());
-        request.setAttribute("barTitle",       barTitle);
+        request.setAttribute("catLabelsJson", catLabelsJson.toString());
+        request.setAttribute("catValuesJson", catValuesJson.toString());
+        request.setAttribute("barLabelsJson", barLabelsJson.toString());
+        request.setAttribute("barValuesJson", barValuesJson.toString());
+        request.setAttribute("barTitle", barTitle);
 
         request.getRequestDispatcher("/profile.jsp").forward(request, response);
     }
 
-    // ---- Helpers ----
-
-    private int parseIntParam(String val, int defaultVal) {
-        if (val == null || val.trim().isEmpty()) return defaultVal;
+    private int parseFilterInt(String val) {
+        if (val == null || val.trim().isEmpty() || "all".equalsIgnoreCase(val.trim())) {
+            return 0;
+        }
         try {
-            int v = Integer.parseInt(val.trim());
-            return v > 0 ? v : defaultVal;
+            int parsed = Integer.parseInt(val.trim());
+            return Math.max(parsed, 0);
         } catch (NumberFormatException e) {
-            return defaultVal;
+            return 0;
         }
     }
 
-    /** Minimal JSON string escaper — only needed for category names. */
+    private String parseFilterString(String val) {
+        if (val == null || val.trim().isEmpty() || "all".equalsIgnoreCase(val.trim())) {
+            return null;
+        }
+        return val.trim();
+    }
+
     private String escapeJson(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+        if (s == null)
+            return "";
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\b", "\\b")
+                .replace("\f", "\\f")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 }
-

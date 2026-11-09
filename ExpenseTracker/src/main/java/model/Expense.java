@@ -87,6 +87,10 @@ public class Expense implements Serializable {
         return expenseDate;
     }
 
+    public Date getDate() {
+        return expenseDate;
+    }
+
     public void setExpenseDate(Date expenseDate) {
         this.expenseDate = expenseDate;
     }

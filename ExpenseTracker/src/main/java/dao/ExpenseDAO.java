@@ -426,5 +426,40 @@ public class ExpenseDAO {
         }
         return map;
     }
+
+    /**
+     * Alias for getExpenseYears: returns distinct years for the user.
+     */
+    public List<Integer> getDistinctYears(int userId) {
+        return getExpenseYears(userId);
+    }
+
+    /**
+     * Alias for getUserCategories: returns distinct categories for the user.
+     */
+    public List<String> getDistinctCategories(int userId) {
+        return getUserCategories(userId);
+    }
+
+    /**
+     * Returns category totals matching the filtered criteria.
+     */
+    public Map<String, BigDecimal> getCategoryTotals(int userId, int year, int month, int day, String category) {
+        return getCategorySummary(userId, year, month, day, category);
+    }
+
+    /**
+     * Returns monthly totals (1-12) matching the filtered criteria.
+     */
+    public Map<Integer, BigDecimal> getMonthlyTotals(int userId, int year, String category) {
+        return getMonthlySummary(userId, year, category);
+    }
+
+    /**
+     * Returns daily totals (1-31) matching the filtered criteria.
+     */
+    public Map<Integer, BigDecimal> getDailyTotals(int userId, int year, int month, String category) {
+        return getDailySummary(userId, year, month, category);
+    }
 }
 

@@ -226,10 +226,11 @@
                                             </td>
                                             <td style="text-align: center;">
                                                 <button type="button" class="btn-edit"
-                                                    data-id="<c:out value='${exp.id}'/>"
+                                                    data-id="${exp.id}"
                                                     data-title="<c:out value='${exp.title}'/>"
                                                     data-amount="${exp.amount}"
                                                     data-category="<c:out value='${exp.category}'/>"
+                                                    data-date="${exp.date}"
                                                     onclick="openEditModal(this)"
                                                     title="Edit expense">
                                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -258,12 +259,61 @@
         </div>
     </main>
 
+    <!-- ================================================================
+         Edit Expense Modal (Popup)
+         ================================================================ -->
+    <div id="editModal" class="modal-overlay" aria-hidden="true">
+        <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+            <div class="modal-header">
+                <h3 id="editModalTitle">Edit Expense</h3>
+                <button type="button" class="modal-close" id="editCloseBtn" aria-label="Close">&times;</button>
+            </div>
+            <form method="post" action="${pageContext.request.contextPath}/expenses" id="editForm">
+                <input type="hidden" name="action" value="update">
+                <input type="hidden" name="id" id="editId">
+                <div class="form-group">
+                    <label for="editTitleInput">Expense Title</label>
+                    <input type="text" name="title" id="editTitleInput" maxlength="100" required>
+                    <span id="editTitleError" class="form-error"></span>
+                </div>
+                <div class="form-group">
+                    <label for="editAmount">Amount (₹)</label>
+                    <input type="number" name="amount" id="editAmount" step="0.01" min="0.01" max="99999999.99" required>
+                    <span id="editAmountError" class="form-error"></span>
+                </div>
+                <div class="form-group">
+                    <label for="editCategory">Category</label>
+                    <select name="category" id="editCategory" required>
+                        <option value="" disabled selected>-- Select Category --</option>
+                        <option value="Food">Food &amp; Dining</option>
+                        <option value="Transport">Transportation</option>
+                        <option value="Housing">Housing &amp; Rent</option>
+                        <option value="Utilities">Utilities &amp; Bills</option>
+                        <option value="Entertainment">Entertainment</option>
+                        <option value="Healthcare">Healthcare</option>
+                        <option value="Shopping">Shopping</option>
+                        <option value="Education">Education</option>
+                        <option value="Other">Other</option>
+                    </select>
+                    <span id="editCategoryError" class="form-error"></span>
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="button" class="btn btn-danger" id="editDeleteBtn">Delete</button>
+                    <button type="button" class="btn btn-ghost" id="editCancelBtn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Hidden Delete Form -->
+    <form id="deleteFromModalForm" method="post" action="${pageContext.request.contextPath}/expenses" style="display:none;">
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="id" id="deleteModalId">
+    </form>
+
     <script src="${pageContext.request.contextPath}/js/validation.js"></script>
 
-    <!-- ================================================================
-         Edit Expense Modal
-         ================================================================ -->
-  
     <script>
     // ---- Edit modal helpers ----
     function openEditModal(btn) {
@@ -279,10 +329,10 @@
 
         var sel = document.getElementById("editCategory");
         sel.value = category;
-        if (!sel.value) sel.value = ""; // fallback if unknown category
+        if (!sel.value) sel.value = "";
 
         // Clear any previous errors
-        ["editTitleError","editAmountError","editCategoryError"].forEach(function(e){
+        ["editTitleError", "editAmountError", "editCategoryError"].forEach(function(e) {
             var el = document.getElementById(e);
             if (el) { el.textContent = ""; el.style.display = "none"; }
         });
@@ -300,9 +350,14 @@
         modal.setAttribute("aria-hidden", "true");
         document.body.style.overflow = "";
         document.getElementById("editForm").reset();
+
+        ["editTitleError", "editAmountError", "editCategoryError"].forEach(function(e) {
+            var el = document.getElementById(e);
+            if (el) { el.textContent = ""; el.style.display = "none"; }
+        });
     }
 
-    // ---- Modal event listeners ----
+    // Modal event listeners
     document.getElementById("editCloseBtn").addEventListener("click", closeEditModal);
     document.getElementById("editCancelBtn").addEventListener("click", closeEditModal);
 
@@ -316,7 +371,7 @@
         if (e.key === "Escape") closeEditModal();
     });
 
-    // Delete button -> confirm, then POST to existing delete endpoint
+    // Delete button -> confirm, then POST to delete endpoint
     document.getElementById("editDeleteBtn").addEventListener("click", function() {
         if (confirm("Delete this expense?")) {
             document.getElementById("deleteFromModalForm").submit();
@@ -330,21 +385,25 @@
         var amount = parseFloat(document.getElementById("editAmount").value);
         var cat    = document.getElementById("editCategory").value;
 
-        ["editTitleError","editAmountError","editCategoryError"].forEach(function(id){
+        ["editTitleError", "editAmountError", "editCategoryError"].forEach(function(id) {
             var el = document.getElementById(id);
             if (el) { el.textContent = ""; el.style.display = "none"; }
         });
 
         if (!title || title.length > 100) {
-            showModalError("editTitleError", "Title is required (max 100 characters)."); valid = false;
+            showModalError("editTitleError", "Title is required (max 100 characters).");
+            valid = false;
         }
         if (isNaN(amount) || amount <= 0) {
-            showModalError("editAmountError", "Amount must be a positive number greater than 0."); valid = false;
+            showModalError("editAmountError", "Amount must be a positive number greater than 0.");
+            valid = false;
         } else if (amount > 99999999.99) {
-            showModalError("editAmountError", "Amount exceeds maximum limit."); valid = false;
+            showModalError("editAmountError", "Amount exceeds maximum limit.");
+            valid = false;
         }
         if (!cat) {
-            showModalError("editCategoryError", "Please select a category."); valid = false;
+            showModalError("editCategoryError", "Please select a category.");
+            valid = false;
         }
         if (!valid) e.preventDefault();
     });
@@ -353,6 +412,21 @@
         var el = document.getElementById(id);
         if (el) { el.textContent = msg; el.style.display = "block"; }
     }
+
+    // Auto-hide alert toasts after 3 seconds
+    document.addEventListener("DOMContentLoaded", function() {
+        var alerts = document.querySelectorAll(".alert");
+        if (alerts.length > 0) {
+            setTimeout(function() {
+                alerts.forEach(function(a) {
+                    a.style.transition = "opacity 0.4s ease, transform 0.4s ease";
+                    a.style.opacity = "0";
+                    a.style.transform = "translateY(-6px)";
+                    setTimeout(function() { a.style.display = "none"; }, 400);
+                });
+            }, 3000);
+        }
+    });
     </script>
 </body>
 </html>

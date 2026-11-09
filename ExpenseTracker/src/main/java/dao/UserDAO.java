@@ -126,5 +126,32 @@ public class UserDAO {
         }
         return null;
     }
+
+    /**
+     * Retrieves user details by user ID.
+     *
+     * @param userId authenticated user ID
+     * @return User object (without password hash) if found, null otherwise
+     */
+    public User getUserById(int userId) {
+        String sql = "SELECT user_id, username, email, created_at FROM users WHERE user_id = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    User user = new User();
+                    user.setId(rs.getInt("user_id"));
+                    user.setUsername(rs.getString("username"));
+                    user.setEmail(rs.getString("email"));
+                    user.setCreatedAt(rs.getTimestamp("created_at"));
+                    return user;
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("UserDAO.getUserById error: " + e.getMessage());
+        }
+        return null;
+    }
 }
 
