@@ -4,7 +4,7 @@
 <%@ taglib prefix="fn"  uri="jakarta.tags.functions" %>
 <%--
  =====================================================================
- Task 2 – Profile & Analytics View
+ Profile & Analytics View (rebuilt layout)
  Project: Personal Expense Tracker
  =====================================================================
 --%>
@@ -14,7 +14,19 @@
         return;
     }
 
-    // Derive top spending category from categoryData map for the stat card
+    // ---- Avatar initials from username (max 2 letters) ----
+    String username = (String) session.getAttribute("username");
+    if (username == null) username = "U";
+    StringBuilder ini = new StringBuilder();
+    for (String part : username.trim().split("[^A-Za-z0-9]+")) {
+        if (!part.isEmpty() && ini.length() < 2) {
+            ini.append(Character.toUpperCase(part.charAt(0)));
+        }
+    }
+    if (ini.length() == 0) ini.append(Character.toUpperCase(username.charAt(0)));
+    request.setAttribute("userInitials", ini.toString());
+
+    // ---- Top spending category for the stat row (respects filters) ----
     String topCategory = "—";
     Object cd = request.getAttribute("categoryData");
     if (cd instanceof java.util.Map) {
@@ -39,12 +51,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profile &amp; Analytics - Personal Expense Tracker</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css">
-    <!-- Chart.js via CDN (no additional JAR needed) -->
+    <!-- Chart.js via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
-    <!-- Navbar (same style as index.jsp) -->
+    <!-- Navbar (same as index.jsp, Profile highlighted) -->
     <header class="navbar">
         <a href="${pageContext.request.contextPath}/expenses" class="navbar-brand">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -59,6 +71,10 @@
                 Welcome, <strong><c:out value="${sessionScope.username}" /></strong>
             </span>
             <a href="${pageContext.request.contextPath}/expenses" class="nav-link">Dashboard</a>
+            <a href="${pageContext.request.contextPath}/profile" class="nav-link active">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                Profile
+            </a>
             <form action="${pageContext.request.contextPath}/auth" method="POST" style="display:inline;">
                 <input type="hidden" name="action" value="logout">
                 <button type="submit" class="btn-logout">Logout</button>
@@ -66,240 +82,217 @@
         </div>
     </header>
 
-    <main class="container profile-container">
+    <main class="container profile-page">
+        <div class="profile-layout">
 
-        <h1 class="page-title">Profile &amp; Analytics</h1>
+            <!-- ================= LEFT SIDEBAR ================= -->
+            <aside class="profile-sidebar">
 
-        <!-- ============================================================
-             User Info Card
-             ============================================================ -->
-        <div class="profile-info-card">
-            <div class="profile-avatar">
-                <c:out value="${fn:toUpperCase(fn:substring(sessionScope.username, 0, 1))}" />
-            </div>
-            <div class="profile-info-text">
-                <h2><c:out value="${sessionScope.username}" /></h2>
-                <p><c:out value="${sessionScope.email}" /></p>
-            </div>
-            <div class="profile-stats">
-                <div class="profile-stat">
-                    <span class="profile-stat-value"><c:out value="${fn:length(filteredExpenses)}" /></span>
-                    <span class="profile-stat-label">Total Records</span>
-                </div>
-                <div class="profile-stat">
-                    <span class="profile-stat-value">₹<fmt:formatNumber value="${totalFiltered}" type="number" minFractionDigits="2" maxFractionDigits="2"/></span>
-                    <span class="profile-stat-label">Total Spent</span>
-                </div>
-                <div class="profile-stat">
-                    <span class="profile-stat-value"><c:out value="${topCategory}" /></span>
-                    <span class="profile-stat-label">Top Category</span>
-                </div>
-            </div>
-        </div>
+                <!-- Profile Info Card -->
+                <div class="profile-card profile-info-card">
+                    <div class="profile-avatar-lg"><c:out value="${userInitials}" /></div>
+                    <h2 class="profile-name"><c:out value="${sessionScope.username}" /></h2>
+                    <p class="profile-email"><c:out value="${sessionScope.email}" /></p>
 
-        <!-- ============================================================
-             Filter Panel
-             ============================================================ -->
-        <div class="card">
-            <div class="card-header-flex">
-                <h2 class="card-heading">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:6px; color:var(--primary-color);"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-                    Filters
-                </h2>
-            </div>
-            <form id="filterForm" action="${pageContext.request.contextPath}/profile" method="GET" class="filter-form">
-                <!-- Year -->
-                <div class="filter-group">
-                    <label for="f-year">Year</label>
-                    <select id="f-year" name="year" class="form-control">
-                        <option value="">All Years</option>
-                        <c:forEach var="yr" items="${allYears}">
-                            <option value="${yr}" <c:if test="${filterYear == yr}">selected</c:if>>${yr}</option>
-                        </c:forEach>
-                    </select>
-                </div>
-                <!-- Month -->
-                <div class="filter-group">
-                    <label for="f-month">Month</label>
-                    <select id="f-month" name="month" class="form-control">
-                        <option value="">All Months</option>
-                        <option value="1"  <c:if test="${filterMonth == '1'}">selected</c:if>>January</option>
-                        <option value="2"  <c:if test="${filterMonth == '2'}">selected</c:if>>February</option>
-                        <option value="3"  <c:if test="${filterMonth == '3'}">selected</c:if>>March</option>
-                        <option value="4"  <c:if test="${filterMonth == '4'}">selected</c:if>>April</option>
-                        <option value="5"  <c:if test="${filterMonth == '5'}">selected</c:if>>May</option>
-                        <option value="6"  <c:if test="${filterMonth == '6'}">selected</c:if>>June</option>
-                        <option value="7"  <c:if test="${filterMonth == '7'}">selected</c:if>>July</option>
-                        <option value="8"  <c:if test="${filterMonth == '8'}">selected</c:if>>August</option>
-                        <option value="9"  <c:if test="${filterMonth == '9'}">selected</c:if>>September</option>
-                        <option value="10" <c:if test="${filterMonth == '10'}">selected</c:if>>October</option>
-                        <option value="11" <c:if test="${filterMonth == '11'}">selected</c:if>>November</option>
-                        <option value="12" <c:if test="${filterMonth == '12'}">selected</c:if>>December</option>
-                    </select>
-                </div>
-                <!-- Day -->
-                <div class="filter-group">
-                    <label for="f-day">Day</label>
-                    <select id="f-day" name="day" class="form-control">
-                        <option value="">All Days</option>
-                        <c:forEach var="d" begin="1" end="31">
-                            <option value="${d}" <c:if test="${filterDay == d}">selected</c:if>>${d}</option>
-                        </c:forEach>
-                    </select>
-                </div>
-                <!-- Category -->
-                <div class="filter-group">
-                    <label for="f-cat">Category</label>
-                    <select id="f-cat" name="category" class="form-control">
-                        <option value="">All Categories</option>
-                        <c:forEach var="cat" items="${allCategories}">
-                            <option value="${cat}" <c:if test="${filterCategory == cat}">selected</c:if>><c:out value="${cat}"/></option>
-                        </c:forEach>
-                    </select>
-                </div>
-                <!-- Buttons -->
-                <div class="filter-group filter-actions">
-                    <button type="submit" class="btn-primary">Apply</button>
-                    <a href="${pageContext.request.contextPath}/profile" class="btn-reset">Reset</a>
-                </div>
-            </form>
-        </div>
+                    <div class="profile-divider"></div>
 
-        <!-- ============================================================
-             View Toggle (Graph / Table)
-             ============================================================ -->
-        <div class="view-tabs">
-            <button id="tabGraph" class="view-tab active" onclick="switchTab('graph')">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="12" width="4" height="10"/><rect x="9" y="7" width="4" height="15"/><rect x="16" y="2" width="4" height="20"/></svg>
-                Graph View
-            </button>
-            <button id="tabTable" class="view-tab" onclick="switchTab('table')">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-                Table View
-            </button>
-        </div>
-
-        <!-- ============================================================
-             Graph View
-             ============================================================ -->
-        <div id="graphView">
-            <div class="chart-grid">
-                <!-- Doughnut chart: by category -->
-                <div class="card chart-card">
-                    <div class="card-header-flex">
-                        <h2 class="card-heading">Spending by Category</h2>
+                    <div class="profile-stat-row">
+                        <span class="profile-stat-label">Total Records</span>
+                        <span class="profile-stat-value"><c:out value="${fn:length(filteredExpenses)}" /></span>
                     </div>
-                    <c:choose>
-                        <c:when test="${fn:length(categoryData) == 0}">
-                            <div class="chart-empty">
-                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                    <div class="profile-stat-row">
+                        <span class="profile-stat-label">Total Spent</span>
+                        <span class="profile-stat-value">₹<fmt:formatNumber value="${totalFiltered}" pattern="#,##,##0.00"/></span>
+                    </div>
+                    <div class="profile-stat-row">
+                        <span class="profile-stat-label">Top Category</span>
+                        <span class="profile-stat-value">
+                            <c:choose>
+                                <c:when test="${topCategory == '—'}">—</c:when>
+                                <c:otherwise><span class="profile-pill"><c:out value="${topCategory}"/></span></c:otherwise>
+                            </c:choose>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Filters Card -->
+                <div class="profile-card profile-filters-card">
+                    <h2 class="profile-card-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary-color);"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                        Filters
+                    </h2>
+                    <div class="profile-divider"></div>
+
+                    <form id="profileFilterForm" action="${pageContext.request.contextPath}/profile" method="GET" class="profile-filter-form">
+                        <div class="profile-field">
+                            <label for="f-year">Year</label>
+                            <select id="f-year" name="year" class="profile-select">
+                                <option value="">All Years</option>
+                                <c:forEach var="yr" items="${allYears}">
+                                    <option value="${yr}" <c:if test="${filterYear == yr}">selected</c:if>><c:out value="${yr}"/></option>
+                                </c:forEach>
+                            </select>
+                        </div>
+                        <div class="profile-field">
+                            <label for="f-month">Month</label>
+                            <select id="f-month" name="month" class="profile-select">
+                                <option value="">All Months</option>
+                                <option value="1"  <c:if test="${filterMonth == '1'}">selected</c:if>>January</option>
+                                <option value="2"  <c:if test="${filterMonth == '2'}">selected</c:if>>February</option>
+                                <option value="3"  <c:if test="${filterMonth == '3'}">selected</c:if>>March</option>
+                                <option value="4"  <c:if test="${filterMonth == '4'}">selected</c:if>>April</option>
+                                <option value="5"  <c:if test="${filterMonth == '5'}">selected</c:if>>May</option>
+                                <option value="6"  <c:if test="${filterMonth == '6'}">selected</c:if>>June</option>
+                                <option value="7"  <c:if test="${filterMonth == '7'}">selected</c:if>>July</option>
+                                <option value="8"  <c:if test="${filterMonth == '8'}">selected</c:if>>August</option>
+                                <option value="9"  <c:if test="${filterMonth == '9'}">selected</c:if>>September</option>
+                                <option value="10" <c:if test="${filterMonth == '10'}">selected</c:if>>October</option>
+                                <option value="11" <c:if test="${filterMonth == '11'}">selected</c:if>>November</option>
+                                <option value="12" <c:if test="${filterMonth == '12'}">selected</c:if>>December</option>
+                            </select>
+                        </div>
+                        <div class="profile-field">
+                            <label for="f-day">Day</label>
+                            <select id="f-day" name="day" class="profile-select">
+                                <option value="">All Days</option>
+                                <c:forEach var="d" begin="1" end="31">
+                                    <option value="${d}" <c:if test="${filterDay == d}">selected</c:if>><c:out value="${d}"/></option>
+                                </c:forEach>
+                            </select>
+                        </div>
+                        <div class="profile-field">
+                            <label for="f-cat">Category</label>
+                            <select id="f-cat" name="category" class="profile-select">
+                                <option value="">All Categories</option>
+                                <c:forEach var="cat" items="${allCategories}">
+                                    <option value="${cat}" <c:if test="${filterCategory == cat}">selected</c:if>><c:out value="${cat}"/></option>
+                                </c:forEach>
+                            </select>
+                        </div>
+
+                        <div class="profile-filter-actions">
+                            <button type="submit" class="profile-btn profile-btn-primary">Apply</button>
+                            <a href="${pageContext.request.contextPath}/profile" class="profile-btn profile-btn-reset">Reset</a>
+                        </div>
+                    </form>
+                </div>
+
+            </aside>
+
+            <!-- ================= RIGHT MAIN AREA ================= -->
+            <section class="profile-main">
+
+                <!-- Charts Panel -->
+                <div class="profile-card profile-charts-panel">
+                    <h2 class="profile-card-title">Spending Overview</h2>
+                    <div class="profile-divider"></div>
+                    <div class="profile-charts-grid">
+
+                        <!-- Doughnut: by category -->
+                        <div class="profile-chart-card">
+                            <h3 class="profile-chart-title">By Category</h3>
+                            <c:choose>
+                                <c:when test="${fn:length(categoryData) == 0}">
+                                    <div class="profile-chart-empty">
+                                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                                        <span>No data for selected filters</span>
+                                    </div>
+                                </c:when>
+                                <c:otherwise>
+                                    <div class="profile-chart-wrap">
+                                        <canvas id="pieChart"></canvas>
+                                    </div>
+                                </c:otherwise>
+                            </c:choose>
+                        </div>
+
+                        <!-- Bar: by month or by day -->
+                        <div class="profile-chart-card">
+                            <h3 class="profile-chart-title"><c:out value="${barTitle}"/></h3>
+                            <div class="profile-chart-wrap" id="barWrap">
+                                <canvas id="barChart"></canvas>
+                            </div>
+                            <div class="profile-chart-empty" id="barEmpty" style="display:none;">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
                                 <span>No data for selected filters</span>
                             </div>
-                        </c:when>
-                        <c:otherwise>
-                            <div class="chart-wrap">
-                                <canvas id="pieChart"></canvas>
-                            </div>
-                        </c:otherwise>
-                    </c:choose>
-                </div>
-                <!-- Bar chart: monthly spending -->
-                <div class="card chart-card">
-                    <div class="card-header-flex">
-                        <h2 class="card-heading">Monthly Spending
-                            <c:if test="${not empty filterYear}"> – ${filterYear}</c:if>
-                        </h2>
-                    </div>
-                    <div class="chart-wrap" id="barWrap">
-                        <canvas id="barChart"></canvas>
-                    </div>
-                    <div class="chart-empty" id="barEmpty" style="display:none;">
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
-                        <span>No data for selected filters</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+                        </div>
 
-        <!-- ============================================================
-             Table View
-             ============================================================ -->
-        <div id="tableView" style="display:none;">
-            <div class="card">
-                <div class="card-header-flex">
-                    <h2 class="card-heading">Expense Records</h2>
-                    <span style="font-size:0.85rem; color:var(--text-muted);">
-                        <c:out value="${fn:length(filteredExpenses)}"/> record(s) &nbsp;|&nbsp;
-                        Total: ₹<fmt:formatNumber value="${totalFiltered}" type="number" minFractionDigits="2" maxFractionDigits="2"/>
-                    </span>
+                    </div>
                 </div>
-                <div class="table-responsive">
+
+                <!-- Filtered Expenses Table -->
+                <div class="profile-card profile-table-card">
+                    <div class="profile-table-head">
+                        <h2 class="profile-card-title">Expenses</h2>
+                        <span class="profile-record-count">
+                            <c:out value="${fn:length(filteredExpenses)}"/> record(s)
+                        </span>
+                    </div>
+                    <div class="profile-divider"></div>
+
                     <c:choose>
                         <c:when test="${not empty filteredExpenses}">
-                            <table id="profileTable">
-                                <thead>
-                                    <tr>
-                                        <th onclick="sortTable(0)" style="cursor:pointer;">Date ▲▼</th>
-                                        <th onclick="sortTable(1)" style="cursor:pointer;">Category ▲▼</th>
-                                        <th onclick="sortTable(2)" style="cursor:pointer;">Title ▲▼</th>
-                                        <th class="amount-col" onclick="sortTable(3)" style="cursor:pointer;">Amount (₹) ▲▼</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="profileTableBody">
-                                    <c:forEach var="exp" items="${filteredExpenses}">
+                            <div class="profile-table-scroll">
+                                <table class="profile-table" id="profileTable">
+                                    <thead>
                                         <tr>
-                                            <td><fmt:formatDate value="${exp.expenseDate}" pattern="yyyy-MM-dd"/></td>
-                                            <td>
-                                                <span class="cat-pill">
-                                                    <c:out value="${exp.category}"/>
-                                                </span>
-                                            </td>
-                                            <td><c:out value="${exp.title}"/></td>
-                                            <td class="amount-col">
-                                                ₹<fmt:formatNumber value="${exp.amount}" type="number" minFractionDigits="2" maxFractionDigits="2"/>
-                                            </td>
+                                            <th onclick="sortTable(0)">Date &#9650;&#9660;</th>
+                                            <th onclick="sortTable(1)">Title &#9650;&#9660;</th>
+                                            <th onclick="sortTable(2)">Category &#9650;&#9660;</th>
+                                            <th class="amount-col" onclick="sortTable(3)">Amount (&#8377;) &#9650;&#9660;</th>
                                         </tr>
-                                    </c:forEach>
-                                </tbody>
-                                <tfoot>
-                                    <tr class="table-total-row">
-                                        <td colspan="3"><strong>Total</strong></td>
-                                        <td class="amount-col">
-                                            <strong>₹<fmt:formatNumber value="${totalFiltered}" type="number" minFractionDigits="2" maxFractionDigits="2"/></strong>
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                            <!-- Pagination controls -->
+                                    </thead>
+                                    <tbody id="profileTableBody">
+                                        <c:forEach var="exp" items="${filteredExpenses}">
+                                            <tr>
+                                                <td><fmt:formatDate value="${exp.expenseDate}" pattern="yyyy-MM-dd"/></td>
+                                                <td><c:out value="${exp.title}"/></td>
+                                                <td><span class="profile-pill"><c:out value="${exp.category}"/></span></td>
+                                                <td class="amount-col">&#8377;<fmt:formatNumber value="${exp.amount}" pattern="#,##,##0.00"/></td>
+                                            </tr>
+                                        </c:forEach>
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="profile-table-total">
+                                            <td colspan="3"><strong>Total</strong></td>
+                                            <td class="amount-col"><strong>&#8377;<fmt:formatNumber value="${totalFiltered}" pattern="#,##,##0.00"/></strong></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
                             <div class="pagination" id="pagination"></div>
                         </c:when>
                         <c:otherwise>
-                            <div class="empty-state">
-                                <p>No expenses match the selected filters.</p>
+                            <div class="profile-table-empty">
+                                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                <p>No expenses match your filters</p>
                             </div>
                         </c:otherwise>
                     </c:choose>
                 </div>
-            </div>
-        </div>
 
+            </section>
+        </div>
     </main>
 
+    <!-- Chart data injected from servlet as JSON -->
     <script type="application/json" id="catLabelsJson">${catLabelsJson}</script>
     <script type="application/json" id="catValuesJson">${catValuesJson}</script>
-    <script type="application/json" id="monthValuesJson">${monthValuesJson}</script>
+    <script type="application/json" id="barLabelsJson">${barLabelsJson}</script>
+    <script type="application/json" id="barValuesJson">${barValuesJson}</script>
 
     <script>
     // ================================================================
-    // Chart data injected from servlet (already JSON-safe strings)
+    // Chart data
     // ================================================================
     function jsonEl(id) {
         return JSON.parse(document.getElementById(id).textContent);
     }
-    var catLabels  = jsonEl("catLabelsJson");
-    var catValues  = jsonEl("catValuesJson");
-    var monthVals  = jsonEl("monthValuesJson");
-    var monthLabels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    var catLabels = jsonEl("catLabelsJson");
+    var catValues = jsonEl("catValuesJson");
+    var barLabels = jsonEl("barLabelsJson");
+    var barValues = jsonEl("barValuesJson");
 
     var BADGE_COLORS = {
         "Food":          "#ef4444",
@@ -314,11 +307,15 @@
     };
 
     var PIE_PALETTE = [
-        "#ef4444","#0ea5e9","#f59e0b","#3b82f6","#a855f7",
-        "#22c55e","#ec4899","#8b5cf6","#94a3b8","#f97316"
+        "#2563eb","#0ea5e9","#f59e0b","#22c55e","#a855f7",
+        "#ec4899","#8b5cf6","#f97316","#14b8a6","#64748b"
     ];
 
-    // ---- Doughnut chart ----
+    var TOOLTIP_INR = function(ctx) {
+        return " ₹" + parseFloat(ctx.parsed.y !== undefined ? ctx.parsed.y : ctx.parsed).toFixed(2);
+    };
+
+    // ---- Doughnut chart (by category) ----
     var pieCtx = document.getElementById("pieChart");
     if (pieCtx && catLabels.length > 0) {
         var pieColors = catLabels.map(function(l, i) {
@@ -340,38 +337,34 @@
                 maintainAspectRatio: false,
                 cutout: "60%",
                 plugins: {
-                    legend: { position: "bottom", labels: { font: { size: 12 }, padding: 16 } },
-                    tooltip: {
-                        callbacks: {
-                            label: function(ctx) {
-                                return " ₹" + parseFloat(ctx.parsed).toFixed(2);
-                            }
-                        }
-                    }
+                    legend: { position: "bottom", labels: { font: { size: 12 }, padding: 14 } },
+                    tooltip: { callbacks: { label: TOOLTIP_INR } }
                 }
             }
         });
     }
 
-    // ---- Bar chart (monthly) ----
+    // ---- Bar chart (by month or by day) ----
     var barCtx = document.getElementById("barChart");
     var barWrap = document.getElementById("barWrap");
     var barEmpty = document.getElementById("barEmpty");
-    var hasMonthlyData = monthVals.some(function(v) { return parseFloat(v) > 0; });
-    if (!hasMonthlyData && barWrap && barEmpty) {
+    var hasBarData = barValues.some(function(v) { return parseFloat(v) > 0; });
+    if (!hasBarData && barWrap && barEmpty) {
         barWrap.style.display = "none";
         barEmpty.style.display = "flex";
     }
-    if (barCtx && hasMonthlyData) {
+    if (barCtx && hasBarData) {
         new Chart(barCtx.getContext("2d"), {
             type: "bar",
             data: {
-                labels: monthLabels,
+                labels: barLabels,
                 datasets: [{
                     label: "Spending (₹)",
-                    data: monthVals,
-                    backgroundColor: "rgba(37,99,235,0.7)",
-                    borderRadius: 4
+                    data: barValues,
+                    backgroundColor: "rgba(37,99,235,0.75)",
+                    hoverBackgroundColor: "#2563eb",
+                    borderRadius: 6,
+                    maxBarThickness: 42
                 }]
             },
             options: {
@@ -379,35 +372,18 @@
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: function(ctx) {
-                                return " ₹" + parseFloat(ctx.parsed.y).toFixed(2);
-                            }
-                        }
-                    }
+                    tooltip: { callbacks: { label: TOOLTIP_INR } }
                 },
                 scales: {
+                    x: { grid: { display: false } },
                     y: {
                         beginAtZero: true,
-                        ticks: {
-                            callback: function(v) { return "₹" + v; }
-                        }
+                        grid: { color: "#f1f5f9" },
+                        ticks: { callback: function(v) { return "₹" + v; } }
                     }
                 }
             }
         });
-    }
-
-    // ================================================================
-    // View toggle
-    // ================================================================
-    function switchTab(tab) {
-        var isGraph = (tab === "graph");
-        document.getElementById("graphView").style.display = isGraph ? "" : "none";
-        document.getElementById("tableView").style.display = isGraph ? "none" : "";
-        document.getElementById("tabGraph").classList.toggle("active", isGraph);
-        document.getElementById("tabTable").classList.toggle("active", !isGraph);
     }
 
     // ================================================================
@@ -433,7 +409,6 @@
         });
         rows.forEach(function(r) { tbody.appendChild(r); });
         sortAsc[colIndex] = !asc;
-        // Re-paginate after sort
         currentPage = 1;
         renderPage();
     }
@@ -476,9 +451,7 @@
         pag.appendChild(mkBtn("Next", pages, currentPage === pages));
     }
 
-    // Initialise pagination on page load
     document.addEventListener("DOMContentLoaded", function() { renderPage(); });
     </script>
 </body>
 </html>
-

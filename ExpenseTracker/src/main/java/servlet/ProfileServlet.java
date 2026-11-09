@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 
@@ -69,6 +70,7 @@ public class ProfileServlet extends HttpServlet {
         List<Expense> expenses = expenseDAO.getExpensesByFilter(userId, year, month, day, category);
         Map<String, BigDecimal> catData     = expenseDAO.getCategorySummary(userId, year, month, day, category);
         Map<Integer, BigDecimal> monthlyData = expenseDAO.getMonthlySummary(userId, year, category);
+        Map<Integer, BigDecimal> dailyData   = expenseDAO.getDailySummary(userId, year, month, category);
         List<Integer> allYears              = expenseDAO.getExpenseYears(userId);
         List<String>  allCategories         = expenseDAO.getUserCategories(userId);
 
@@ -90,14 +92,33 @@ public class ProfileServlet extends HttpServlet {
         catLabels.append("]");
         catValues.append("]");
 
-        // Monthly bar: always 12 values, months Jan-Dec
-        StringBuilder monthValues = new StringBuilder("[");
-        for (int m = 1; m <= 12; m++) {
-            if (m > 1) monthValues.append(",");
-            BigDecimal v = monthlyData.getOrDefault(m, BigDecimal.ZERO);
-            monthValues.append(v.toPlainString());
+        // Bar chart: grouped by day when a month is selected, otherwise by month.
+        // Labels and values are emitted as parallel JSON arrays.
+        StringBuilder barLabels = new StringBuilder("[");
+        StringBuilder barValues = new StringBuilder("[");
+        String barTitle;
+        if (month > 0) {
+            barTitle = "By Day";
+            int maxDay = (year > 0)
+                    ? YearMonth.of(year, month).lengthOfMonth()
+                    : 31;
+            for (int d = 1; d <= maxDay; d++) {
+                if (d > 1) { barLabels.append(","); barValues.append(","); }
+                barLabels.append("\"").append(d).append("\"");
+                barValues.append(dailyData.getOrDefault(d, BigDecimal.ZERO).toPlainString());
+            }
+        } else {
+            barTitle = "By Month";
+            String[] monthNames = {"Jan","Feb","Mar","Apr","May","Jun",
+                                   "Jul","Aug","Sep","Oct","Nov","Dec"};
+            for (int m = 1; m <= 12; m++) {
+                if (m > 1) { barLabels.append(","); barValues.append(","); }
+                barLabels.append("\"").append(monthNames[m - 1]).append("\"");
+                barValues.append(monthlyData.getOrDefault(m, BigDecimal.ZERO).toPlainString());
+            }
         }
-        monthValues.append("]");
+        barLabels.append("]");
+        barValues.append("]");
 
         // ---- Set request attributes ----
         request.setAttribute("filteredExpenses", expenses);
@@ -115,7 +136,9 @@ public class ProfileServlet extends HttpServlet {
         // JSON for charts
         request.setAttribute("catLabelsJson",  catLabels.toString());
         request.setAttribute("catValuesJson",  catValues.toString());
-        request.setAttribute("monthValuesJson", monthValues.toString());
+        request.setAttribute("barLabelsJson",  barLabels.toString());
+        request.setAttribute("barValuesJson",  barValues.toString());
+        request.setAttribute("barTitle",       barTitle);
 
         request.getRequestDispatcher("/profile.jsp").forward(request, response);
     }

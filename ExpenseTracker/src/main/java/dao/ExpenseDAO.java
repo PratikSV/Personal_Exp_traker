@@ -388,5 +388,43 @@ public class ExpenseDAO {
         }
         return map;
     }
+
+    /**
+     * Returns spending grouped by day-of-month (1-31) for the filtered data set.
+     * Used by the Profile bar chart when a month filter is selected.
+     * All 31 slots are initialised to zero so charts always have fixed data points.
+     */
+    public Map<Integer, BigDecimal> getDailySummary(int userId, int year, int month, String category) {
+        Map<Integer, BigDecimal> map = new LinkedHashMap<>();
+        for (int d = 1; d <= 31; d++) map.put(d, BigDecimal.ZERO);
+
+        StringBuilder sb = new StringBuilder(
+            "SELECT DAY(expense_date) AS dy, COALESCE(SUM(amount), 0) AS dy_total " +
+            "FROM expenses WHERE user_id = ?");
+
+        List<Object> params = new ArrayList<>();
+        params.add(userId);
+        if (year > 0) { sb.append(" AND YEAR(expense_date) = ?"); params.add(year); }
+        if (month > 0) { sb.append(" AND MONTH(expense_date) = ?"); params.add(month); }
+        if (category != null && !category.trim().isEmpty()) {
+            sb.append(" AND category = ?"); params.add(category.trim());
+        }
+        sb.append(" GROUP BY DAY(expense_date) ORDER BY dy ASC");
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sb.toString())) {
+            for (int i = 0; i < params.size(); i++) {
+                Object v = params.get(i);
+                if (v instanceof Integer) ps.setInt(i + 1, (Integer) v);
+                else ps.setString(i + 1, (String) v);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) map.put(rs.getInt("dy"), rs.getBigDecimal("dy_total"));
+            }
+        } catch (SQLException e) {
+            System.err.println("ExpenseDAO.getDailySummary error: " + e.getMessage());
+        }
+        return map;
+    }
 }
 
