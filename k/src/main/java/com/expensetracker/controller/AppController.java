@@ -2,6 +2,7 @@ package com.expensetracker.controller;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import jakarta.servlet.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -11,6 +12,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 @Controller
+@SuppressWarnings("null")
 public class AppController {
     private final JdbcTemplate db;
     private final PasswordEncoder encoder;
@@ -48,10 +50,6 @@ public class AppController {
     private String userName(HttpSession s) {
         Object n = s.getAttribute("userName");
         return n == null ? "" : n.toString();
-    }
-
-    private String auth(HttpSession s) {
-        return uid(s) == null ? "redirect:/login" : null;
     }
 
     @GetMapping({ "/", "/login" })
@@ -138,33 +136,282 @@ public class AppController {
     }
 
     @GetMapping("/dashboard")
-    public String dashboard(HttpSession s, Model m) {
+    public String dashboard(
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false, defaultValue = "ALL") String type,
+            @RequestParam(required = false) Long categoryId,
+            HttpSession s, Model m) {
         if (uid(s) == null)
             return "redirect:/login";
         long id = uid(s);
-        BigDecimal income = money("SELECT COALESCE(SUM(amount),0) FROM income WHERE user_id=?", id);
-        BigDecimal expense = money("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE user_id=?", id);
+
+        // Parse optional date filters
+        LocalDate start = null;
+        LocalDate end = null;
+        if (startDate != null && !startDate.trim().isEmpty()) {
+            try {
+                start = LocalDate.parse(startDate.trim());
+            } catch (Exception ignored) {
+            }
+        }
+        if (endDate != null && !endDate.trim().isEmpty()) {
+            try {
+                end = LocalDate.parse(endDate.trim());
+            } catch (Exception ignored) {
+            }
+        }
+
+        String filterType = "ALL";
+        if ("EXPENSE".equalsIgnoreCase(type)) {
+            filterType = "EXPENSE";
+        } else if ("INCOME".equalsIgnoreCase(type)) {
+            filterType = "INCOME";
+        }
+
+        Long filterCategory = (categoryId != null && categoryId > 0) ? categoryId : null;
+
+        // 1. Calculate Income Total
+        BigDecimal income = BigDecimal.ZERO;
+        if (!"EXPENSE".equals(filterType)) {
+            StringBuilder incSql = new StringBuilder("SELECT COALESCE(SUM(amount), 0) FROM income WHERE user_id = ?");
+            List<Object> incParams = new ArrayList<>();
+            incParams.add(id);
+            if (start != null) {
+                incSql.append(" AND income_date >= ?");
+                incParams.add(start);
+            }
+            if (end != null) {
+                incSql.append(" AND income_date <= ?");
+                incParams.add(end);
+            }
+            income = db.queryForObject(incSql.toString(), BigDecimal.class, incParams.toArray());
+            if (income == null)
+                income = BigDecimal.ZERO;
+        }
+
+        // 2. Calculate Expense Total
+        BigDecimal expense = BigDecimal.ZERO;
+        if (!"INCOME".equals(filterType)) {
+            StringBuilder expSql = new StringBuilder("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE user_id = ?");
+            List<Object> expParams = new ArrayList<>();
+            expParams.add(id);
+            if (start != null) {
+                expSql.append(" AND expense_date >= ?");
+                expParams.add(start);
+            }
+            if (end != null) {
+                expSql.append(" AND expense_date <= ?");
+                expParams.add(end);
+            }
+            if (filterCategory != null) {
+                expSql.append(" AND category_id = ?");
+                expParams.add(filterCategory);
+            }
+            expense = db.queryForObject(expSql.toString(), BigDecimal.class, expParams.toArray());
+            if (expense == null)
+                expense = BigDecimal.ZERO;
+        }
+
+        BigDecimal balance = income.subtract(expense);
+
+        // 3. Cash Flow Timeline (Line Graph)
+        boolean groupByDay = false;
+        if (start != null && end != null && ChronoUnit.DAYS.between(start, end) <= 31) {
+            groupByDay = true;
+        }
+
+        String dateFormat = groupByDay ? "%d %b" : "%b %Y";
+        String dateKey = groupByDay ? "%Y-%m-%d" : "%Y-%m";
+
+        StringBuilder flowSql = new StringBuilder(
+                "SELECT period_key, period_label, SUM(inc) AS income_total, SUM(exp) AS expense_total FROM (");
+
+        // Income subquery
+        flowSql.append("SELECT income_date AS d, DATE_FORMAT(income_date, '").append(dateFormat)
+                .append("') AS period_label, DATE_FORMAT(income_date, '").append(dateKey)
+                .append("') AS period_key, amount AS inc, 0 AS exp FROM income WHERE user_id = ?");
+        List<Object> flowParams = new ArrayList<>();
+        flowParams.add(id);
+        if (start != null) {
+            flowSql.append(" AND income_date >= ?");
+            flowParams.add(start);
+        } else if (end == null) {
+            flowSql.append(" AND income_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)");
+        }
+        if (end != null) {
+            flowSql.append(" AND income_date <= ?");
+            flowParams.add(end);
+        }
+
+        flowSql.append(" UNION ALL ");
+
+        // Expense subquery
+        flowSql.append("SELECT expense_date AS d, DATE_FORMAT(expense_date, '").append(dateFormat)
+                .append("') AS period_label, DATE_FORMAT(expense_date, '").append(dateKey)
+                .append("') AS period_key, 0 AS inc, amount AS exp FROM expenses WHERE user_id = ?");
+        flowParams.add(id);
+        if (start != null) {
+            flowSql.append(" AND expense_date >= ?");
+            flowParams.add(start);
+        } else if (end == null) {
+            flowSql.append(" AND expense_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)");
+        }
+        if (end != null) {
+            flowSql.append(" AND expense_date <= ?");
+            flowParams.add(end);
+        }
+        if (filterCategory != null) {
+            flowSql.append(" AND category_id = ?");
+            flowParams.add(filterCategory);
+        }
+
+        flowSql.append(") x GROUP BY period_key, period_label ORDER BY period_key ASC");
+
+        List<Map<String, Object>> monthly = db.queryForList(flowSql.toString(), flowParams.toArray());
+
+        // 4. Spending / Category Breakdown (Pie Chart)
+        List<Map<String, Object>> categories;
+        if ("INCOME".equals(filterType)) {
+            StringBuilder catSql = new StringBuilder(
+                    "SELECT COALESCE(c.category_name, 'Uncategorised') AS category_name, COALESCE(SUM(i.amount), 0) AS total "
+                            +
+                            "FROM income i " +
+                            "LEFT JOIN categories c ON c.category_id = i.category_id " +
+                            "WHERE i.user_id = ?");
+            List<Object> catParams = new ArrayList<>();
+            catParams.add(id);
+            if (start != null) {
+                catSql.append(" AND i.income_date >= ?");
+                catParams.add(start);
+            }
+            if (end != null) {
+                catSql.append(" AND i.income_date <= ?");
+                catParams.add(end);
+            }
+            catSql.append(" GROUP BY COALESCE(c.category_name, 'Uncategorised') HAVING total > 0 ORDER BY total DESC");
+            categories = db.queryForList(catSql.toString(), catParams.toArray());
+        } else {
+            StringBuilder catSql = new StringBuilder(
+                    "SELECT COALESCE(c.category_name, 'Uncategorised') AS category_name, COALESCE(SUM(e.amount), 0) AS total "
+                            +
+                            "FROM expenses e " +
+                            "LEFT JOIN categories c ON c.category_id = e.category_id " +
+                            "WHERE e.user_id = ?");
+            List<Object> catParams = new ArrayList<>();
+            catParams.add(id);
+            if (start != null) {
+                catSql.append(" AND e.expense_date >= ?");
+                catParams.add(start);
+            }
+            if (end != null) {
+                catSql.append(" AND e.expense_date <= ?");
+                catParams.add(end);
+            }
+            if (filterCategory != null) {
+                catSql.append(" AND e.category_id = ?");
+                catParams.add(filterCategory);
+            }
+            catSql.append(" GROUP BY COALESCE(c.category_name, 'Uncategorised') HAVING total > 0 ORDER BY total DESC");
+            categories = db.queryForList(catSql.toString(), catParams.toArray());
+        }
+
+        // 5. Recent Activity Table (Filtered)
+        StringBuilder recSql = new StringBuilder();
+        List<Object> recParams = new ArrayList<>();
+
+        if ("INCOME".equals(filterType)) {
+            recSql.append(
+                    "SELECT title, amount, income_date AS tx_date, 'Income' AS kind FROM income WHERE user_id = ?");
+            recParams.add(id);
+            if (start != null) {
+                recSql.append(" AND income_date >= ?");
+                recParams.add(start);
+            }
+            if (end != null) {
+                recSql.append(" AND income_date <= ?");
+                recParams.add(end);
+            }
+            recSql.append(" ORDER BY tx_date DESC, income_id DESC LIMIT 10");
+        } else if ("EXPENSE".equals(filterType)) {
+            recSql.append(
+                    "SELECT title, amount, expense_date AS tx_date, 'Expense' AS kind FROM expenses WHERE user_id = ?");
+            recParams.add(id);
+            if (start != null) {
+                recSql.append(" AND expense_date >= ?");
+                recParams.add(start);
+            }
+            if (end != null) {
+                recSql.append(" AND expense_date <= ?");
+                recParams.add(end);
+            }
+            if (filterCategory != null) {
+                recSql.append(" AND category_id = ?");
+                recParams.add(filterCategory);
+            }
+            recSql.append(" ORDER BY tx_date DESC, expense_id DESC LIMIT 10");
+        } else {
+            recSql.append("SELECT title, amount, tx_date, kind FROM (");
+            recSql.append(
+                    "SELECT title, amount, expense_date AS tx_date, 'Expense' AS kind, expense_id AS id FROM expenses WHERE user_id = ?");
+            recParams.add(id);
+            if (start != null) {
+                recSql.append(" AND expense_date >= ?");
+                recParams.add(start);
+            }
+            if (end != null) {
+                recSql.append(" AND expense_date <= ?");
+                recParams.add(end);
+            }
+            if (filterCategory != null) {
+                recSql.append(" AND category_id = ?");
+                recParams.add(filterCategory);
+            }
+
+            recSql.append(" UNION ALL ");
+
+            recSql.append(
+                    "SELECT title, amount, income_date AS tx_date, 'Income' AS kind, income_id AS id FROM income WHERE user_id = ?");
+            recParams.add(id);
+            if (start != null) {
+                recSql.append(" AND income_date >= ?");
+                recParams.add(start);
+            }
+            if (end != null) {
+                recSql.append(" AND income_date <= ?");
+                recParams.add(end);
+            }
+
+            recSql.append(") x ORDER BY tx_date DESC, id DESC LIMIT 10");
+        }
+
+        List<Map<String, Object>> recent = db.queryForList(recSql.toString(), recParams.toArray());
+
+        // 6. User's categories for the filter dropdown
+        List<Map<String, Object>> allCategories = db.queryForList(
+                "SELECT category_id, category_name, category_type FROM categories WHERE user_id = ? ORDER BY category_type DESC, category_name ASC",
+                id);
+
         m.addAttribute("name", userName(s));
         m.addAttribute("income", income);
         m.addAttribute("expense", expense);
-        m.addAttribute("balance", income.subtract(expense));
-        m.addAttribute("recent", db.queryForList(
-                "SELECT title,amount,expense_date AS tx_date,'Expense' AS kind FROM expenses WHERE user_id=? UNION ALL SELECT title,amount,income_date AS tx_date,'Income' AS kind FROM income WHERE user_id=? ORDER BY tx_date DESC LIMIT 8",
-                id, id));
-        m.addAttribute("monthly", db.queryForList(
-                "SELECT DATE_FORMAT(d,'%b') AS month_label, SUM(inc) AS income_total, SUM(exp) AS expense_total FROM (SELECT income_date d,amount inc,0 exp FROM income WHERE user_id=? AND income_date>=DATE_SUB(CURDATE(),INTERVAL 6 MONTH) UNION ALL SELECT expense_date d,0 inc,amount exp FROM expenses WHERE user_id=? AND expense_date>=DATE_SUB(CURDATE(),INTERVAL 6 MONTH)) x GROUP BY YEAR(d),MONTH(d),DATE_FORMAT(d,'%b') ORDER BY MIN(d)",
-                id, id));
-        m.addAttribute("categories", db.queryForList(
-                "SELECT c.category_name,COALESCE(SUM(e.amount),0) total FROM categories c LEFT JOIN expenses e ON e.category_id=c.category_id AND e.user_id=c.user_id WHERE c.user_id=? AND c.category_type='EXPENSE' GROUP BY c.category_id,c.category_name ORDER BY total DESC",
-                id));
+        m.addAttribute("balance", balance);
+        m.addAttribute("recent", recent);
+        m.addAttribute("monthly", monthly);
+        m.addAttribute("categories", categories);
+        m.addAttribute("allCategories", allCategories);
+
+        // Preserve filter form values
+        m.addAttribute("filterStartDate", startDate != null ? startDate.trim() : "");
+        m.addAttribute("filterEndDate", endDate != null ? endDate.trim() : "");
+        m.addAttribute("filterType", filterType);
+        m.addAttribute("filterCategoryId", filterCategory != null ? filterCategory : "");
+        m.addAttribute("isFiltered",
+                (start != null || end != null || !"ALL".equals(filterType) || filterCategory != null));
+
         csrf(s);
         m.addAttribute("csrf", s.getAttribute("csrf"));
         return "dashboard";
-    }
-
-    private BigDecimal money(String sql, long id) {
-        BigDecimal v = db.queryForObject(sql, BigDecimal.class, id);
-        return v == null ? BigDecimal.ZERO : v;
     }
 
     @GetMapping("/transactions")
@@ -187,7 +434,8 @@ public class AppController {
 
     @PostMapping("/transaction/save")
     public String save(@RequestParam String type, @RequestParam String title, @RequestParam String amount,
-            @RequestParam String date, @RequestParam(required = false) String categoryId, @RequestParam String csrfToken,
+            @RequestParam String date, @RequestParam(required = false) String categoryId,
+            @RequestParam String csrfToken,
             HttpSession s, Model m) {
         if (uid(s) == null)
             return "redirect:/login";
@@ -203,7 +451,8 @@ public class AppController {
             if (categoryId != null && !categoryId.trim().isEmpty()) {
                 long cId = Long.parseLong(categoryId.trim());
                 if (cId > 0) {
-                    Integer count = db.queryForObject("SELECT COUNT(*) FROM categories WHERE category_id=? AND user_id=?",
+                    Integer count = db.queryForObject(
+                            "SELECT COUNT(*) FROM categories WHERE category_id=? AND user_id=?",
                             Integer.class, cId, id);
                     if (count == null || count == 0)
                         throw new IllegalArgumentException();

@@ -2,6 +2,7 @@ package com.expensetracker.config;
 
 import javax.sql.DataSource;
 import org.springframework.context.annotation.*;
+import org.springframework.lang.NonNull;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -15,6 +16,7 @@ import org.springframework.web.servlet.view.InternalResourceViewResolver;
 @EnableTransactionManagement
 @ComponentScan("com.expensetracker")
 @Import(DatabaseConfig.class)
+@SuppressWarnings("null")
 public class WebConfig implements WebMvcConfigurer {
     @Bean
     public InternalResourceViewResolver viewResolver() {
@@ -35,12 +37,12 @@ public class WebConfig implements WebMvcConfigurer {
     }
 
     @Bean
-    public PlatformTransactionManager transactionManager(DataSource ds) {
+    public PlatformTransactionManager transactionManager(@NonNull DataSource ds) {
         return new DataSourceTransactionManager(ds);
     }
 
     @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    public void addResourceHandlers(@NonNull ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/assets/**").addResourceLocations("/assets/");
     }
 }

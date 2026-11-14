@@ -8,9 +8,11 @@ import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.lang.NonNull;
 
 @Configuration
 @PropertySource("classpath:application.properties")
+@SuppressWarnings("null")
 public class DatabaseConfig {
 
     @Autowired
@@ -27,7 +29,7 @@ public class DatabaseConfig {
     }
 
     @Bean
-    public JdbcTemplate jdbcTemplate(DataSource dataSource) {
+    public JdbcTemplate jdbcTemplate(@NonNull DataSource dataSource) {
         return new JdbcTemplate(dataSource);
     }
 }

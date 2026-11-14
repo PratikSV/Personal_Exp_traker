@@ -2,6 +2,7 @@ package com.expensetracker.config;
 
 import org.springframework.web.servlet.support.AbstractAnnotationConfigDispatcherServletInitializer;
 
+@SuppressWarnings("null")
 public class WebApplicationInitializer extends AbstractAnnotationConfigDispatcherServletInitializer {
     protected Class<?>[] getRootConfigClasses() {
         return null;
