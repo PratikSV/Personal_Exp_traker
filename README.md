@@ -1,109 +1,188 @@
-# Personal Expense Tracker
+# Pennywise — Personal Expense Tracker
 
-A multi-user web application built with **Java Servlet, JSP, JSTL, and MySQL** following the MVC architectural pattern. It allows users to register, securely log in, and track their expenses with category summaries, sorting capabilities, and data isolation between users.
-
----
-
-## Academic Team Module Distribution
-
-| Module | Team Member | Deliverables / Files |
-| :--- | :--- | :--- |
-| **Member 1** | Database & Core Utilities | `database/schema.sql`, `util/DBConnection.java`, `util/PasswordUtil.java` |
-| **Member 2** | Models & User Access | `model/User.java`, `model/Expense.java`, `dao/UserDAO.java` |
-| **Member 3** | Expense Data Access | `dao/ExpenseDAO.java` |
-| **Member 4** | Authentication & Security | `filter/AuthFilter.java`, `servlet/AuthServlet.java` |
-| **Member 5** | Expense Management & UI | `servlet/ExpenseServlet.java`, `WEB-INF/web.xml`, `index.jsp`, `login.jsp`, `register.jsp`, `css/style.css`, `js/validation.js` |
+A modern, responsive Java web application built with **JDK 17**, Spring MVC 6, Spring JDBC, JSP/JSTL (Jakarta EE), MySQL 8, and Chart.js. This is a traditional Maven WAR web application designed for **Apache Tomcat 10.1 / 11.0+** (not Spring Boot).
 
 ---
 
-## Technology Stack & Environment
+## Features
 
-- **Server:** Apache Tomcat 10+ / 11 (uses standard `jakarta.servlet.*` namespace)
-- **Java Platform:** Java SE 17+ (Project configured for Java 25)
-- **Database:** MySQL 8.x
-- **JDBC Driver:** MySQL Connector/J 8.4.0 (`com.mysql.cj.jdbc.Driver`)
-- **Template / View:** JSP 3.0 / Jakarta JSTL 3.0
-- **Libraries in `WEB-INF/lib`:**
-  - `mysql-connector-j-8.4.0.jar`
-  - `jakarta.servlet.jsp.jstl-api-3.0.0.jar`
-  - `jakarta.servlet.jsp.jstl-3.0.1.jar`
+- **Authentication & Security:**
+  - Account registration and login with BCrypt password hashing (`BCryptPasswordEncoder`).
+  - Session-based user authentication and CSRF token protection on POST forms.
+  - Data isolation ensuring each user accesses only their own records.
+  - Auto-generated default expense categories on initial user signup.
+
+- **Financial Analytics & Dashboard:**
+  - **Summary Metrics:** Total Balance card and a unified **side-by-side** card displaying Total Income and Total Expenses.
+  - **Cash Flow Line Graph:** Visualizes monthly or daily income vs. expense cash flows using Chart.js, paired with a detailed cash flow data breakdown table.
+  - **Spending Breakdown Pie Chart:** Interactive pie chart displaying percentage and amount per category, paired with a categorical breakdown list.
+  - **Toggleable Filter Report Form:** Filter button positioned right beside "＋ Add transaction" to toggle advanced filtering by:
+    - Date range (Start date & End date)
+    - Quick presets (Today, Current Month, Last 30 Days, Year-to-Date, All Time)
+    - Transaction type (Income, Expense, or All)
+    - Specific expense category
+  - **Smart Filtering:** Applying filters dynamically updates the cash flow line graph, category pie chart, and transaction list while preserving all-time Total Balance, Income, and Expenses.
+
+- **Transaction & Budget Management:**
+  - Add, categorize, and track income and expense entries with prepared SQL parameters.
+  - Monthly category budget planner with dynamic spend vs. limit progress indicators.
+  - Fully responsive layout for mobile, tablet, and desktop screens.
 
 ---
 
-## Setup & Execution Instructions
+## Architecture Overview
 
-### Step 1: Run the Database Schema
-1. Open your MySQL client (MySQL Workbench, MySQL Command Line, or phpMyAdmin).
-2. Execute the script located at:
+This project follows a clean MVC architecture on top of Jakarta Servlet specifications:
+
+```text
+├── src/main/java/com/expensetracker/
+│   ├── config/
+│   │   ├── DatabaseConfig.java            # DataSource & JdbcTemplate configuration
+│   │   ├── WebConfig.java                 # Spring MVC view resolver, resource handlers, & formatters
+│   │   └── WebApplicationInitializer.java # Jakarta Servlet 6.0 dispatcher initialization
+│   └── controller/
+│       └── AppController.java             # Endpoints, queries, session logic & model binding
+├── src/main/webapp/
+│   ├── WEB-INF/
+│   │   ├── views/
+│   │   │   ├── dashboard.jsp              # Main financial dashboard, charts, & filters
+│   │   │   ├── transactions.jsp           # Income/expense logging and list view
+│   │   │   ├── budgets.jsp                # Budget limits and progress indicators
+│   │   │   ├── login.jsp                  # User login page
+│   │   │   ├── register.jsp               # New user registration
+│   │   │   └── nav.jspf                   # Shared navigation header
+│   │   └── web.xml                        # Web application deployment descriptor
+│   └── static/
+│       └── css/
+│           └── app.css                    # Responsive stylesheet
+├── database/
+│   └── schema.sql                         # MySQL 8 table schema definitions
+└── pom.xml                                # Maven build and dependency configuration
+```
+
+### Technology Stack
+
+| Component | Technology | Version |
+|-----------|------------|---------|
+| Language / Platform | Java / JDK | 17+ (compiled with `--release 17 -parameters`) |
+| Framework | Spring Web MVC, Spring JDBC | 6.2.3 |
+| Security | Spring Security Crypto (BCrypt) | 6.4.3 |
+| Database | MySQL Server / Connector-J | 8.0+ / 9.2.0 |
+| Servlet Specification | Jakarta Servlet API | 6.0.0 (provided) |
+| JSP & Taglibs | Jakarta JSP & JSTL API | 3.1.1 / 3.0.2 |
+| Application Server | Apache Tomcat | 10.1.x / 11.0.x |
+| Frontend | HTML5, CSS3, Chart.js (CDN) | Responsive |
+
+---
+
+## Prerequisites
+
+1. **Java Development Kit (JDK):** JDK 17, 21, or 27 installed.
+2. **Apache Maven:** Version 3.9+ installed and added to `PATH`.
+3. **MySQL Server:** Version 8.0+ running on `localhost:3306`.
+4. **Apache Tomcat:** Tomcat 10.1 or Tomcat 11.0 installed (e.g., `C:\apache-tomcat-11.0.4`).
+
+---
+
+## Database Setup
+
+1. Open MySQL Workbench or your MySQL CLI.
+2. Run the SQL script located at `database/schema.sql`:
+   ```sql
+   SOURCE database/schema.sql;
    ```
-   ExpenseTracker/database/schema.sql
-   ```
-   This creates the database `expense_tracker_db` and tables `users`, `expenses`, with foreign keys and composite indexes (`idx_user_expense_date`).
-
-### Step 2: Configure MySQL Password
-1. Open `ExpenseTracker/src/main/java/util/DBConnection.java`.
-2. Locate the line with the `TODO`:
-   ```java
-   // TODO: Enter your MySQL password here before running the application!
-   private static final String DB_PASSWORD = "root";
-   ```
-3. Replace `"root"` with your actual MySQL password.
-4. *(Optional verification)*: Run `DBConnection.java` directly as a Java Application in Eclipse (`Run As > Java Application`) to verify that the connection succeeds.
-
-### Step 3: Refresh the Project in Eclipse
-1. In Eclipse, right-click the `ExpenseTracker` project in **Project Explorer** and press **F5** (or click **Refresh**).
-2. Go to **Project > Properties > Java Build Path > Libraries**.
-3. Ensure the JARs in `Web App Libraries` (`WEB-INF/lib/`) are visible and that Apache Tomcat runtime is targeted under **Targeted Runtimes**.
-
-### Step 4: Run on Apache Tomcat
-1. In the **Servers** tab in Eclipse, right-click and choose **Add and Remove...**.
-2. Add `ExpenseTracker` to the configured Tomcat server (e.g. Tomcat 10.1 or 11).
-3. Start the Tomcat server.
-4. Open your browser and navigate to:
-   ```
-   http://localhost:8080/ExpenseTracker/
-   ```
-   *(Or click "Run As > Run on Server" on the project in Eclipse).*
+   *(Creates database `personal_expense_tracker` and tables: `users`, `categories`, `income`, `expenses`, `budgets`, and `remember_tokens`)*
 
 ---
 
-## Security Architecture & Checklist Verification
+## Server & Environment Configuration
 
-- [x] **No SQL Injection:** 100% parameterization with `PreparedStatement`. Whitelisted sorting column parameters.
-- [x] **Cryptographic Password Storage:** `PBKDF2WithHmacSHA256` with random 16-byte salt, 65,536 iterations, formatted as `iterations:saltBase64:hashBase64`.
-- [x] **Constant-time Equality Check:** `MessageDigest.isEqual` to neutralize timing side-channel attacks.
-- [x] **Session Fixation Defense:** `request.changeSessionId()` called immediately upon successful user login.
-- [x] **No User Enumeration:** Generic `"Invalid email or password."` message returned upon login errors.
-- [x] **Complete Multi-Tenant Isolation:** `user_id` is extracted strictly from the validated `HttpSession`, never from client parameters.
-- [x] **IDOR Protection on Deletion:** `DELETE FROM expenses WHERE id = ? AND user_id = ?` ensures a user cannot delete another user's expenses.
-- [x] **Cross-Site Scripting (XSS) Prevention:** Output rendering uses `<c:out>` and JSTL formatters across all views.
-- [x] **Browser Back-Button Protection:** `AuthFilter` applies HTTP no-cache headers (`Cache-Control: no-cache, no-store, must-revalidate`, `Pragma: no-cache`, `Expires: 0`).
-- [x] **Post-Redirect-Get (PRG):** Form submissions redirect to `/expenses` or `/login.jsp` to avoid form resubmission dialogs on refresh.
+Tomcat reads the database connection parameters via environment variables or `application.properties`.
 
----
+### Option A: Via Tomcat `bin/setenv.bat` (Recommended)
+Create or edit `bin\setenv.bat` inside your Tomcat installation directory (e.g., `C:\apache-tomcat-11.0.4\bin\setenv.bat`):
+```cmd
+set "JAVA_HOME=C:\Program Files\Java\jdk-27.0.1.0.3"
+set "DB_URL=jdbc:mysql://localhost:3306/personal_expense_tracker?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata"
+set "DB_USERNAME=root"
+set "DB_PASSWORD=YOUR_MYSQL_PASSWORD"
+```
 
-## Manual Test Checklist
-
-| # | Test Scenario | Steps to Execute | Expected Result |
-| :---: | :--- | :--- | :--- |
-| **1** | **User Registration** | 1. Go to `/register.jsp`.<br>2. Fill in username `alice`, email `alice@example.com`, password `secret123`, confirm `secret123`.<br>3. Click "Create Account". | Redirects to `login.jsp` with green success alert banner: *"Registration successful! Please log in."* |
-| **2** | **Duplicate Username Rejection** | 1. Go to `/register.jsp`.<br>2. Attempt to register again with username `alice` and a different email `alice2@example.com`. | Displays red alert: *"Username is already taken. Please choose another."* |
-| **3** | **Duplicate Email Rejection** | 1. Go to `/register.jsp`.<br>2. Attempt to register with username `bob` and email `alice@example.com`. | Displays red alert: *"An account with this email already exists."* |
-| **4** | **Invalid Login Attempt** | 1. Go to `/login.jsp`.<br>2. Enter email `alice@example.com` with wrong password `wrongpass`. | Displays generic red alert: *"Invalid email or password."* (No username/email disclosure). |
-| **5** | **Successful Login** | 1. Enter email `alice@example.com` and password `secret123`.<br>2. Click "Sign In". | Redirects to `/expenses` (dashboard). Displays *"Welcome, alice"* in navbar. |
-| **6** | **Add Valid Expense** | 1. In Add Expense card, enter Title: `Groceries`, Amount: `54.50`, Category: `Food`, Date: today's date.<br>2. Click "+ Add Expense". | Page reloads showing success message. Expense table displays item with red `Food` badge. Total Spending updates to `$54.50`. |
-| **7** | **Add Invalid Expense (Client & Server Validation)** | 1. Enter empty title or negative amount `-10.00`.<br>2. Try to submit. | Submission blocked by client JS validation. Server also validates and rejects invalid payloads. |
-| **8** | **Sorting Expenses** | 1. Add multiple expenses with different amounts and categories.<br>2. Click "Amount", "Category", or "Date" sort pills. | Table updates ordering dynamically without data loss. |
-| **9** | **Delete Expense with Confirmation** | 1. Click "Delete" on an expense.<br>2. A confirmation prompt pops up: *"Are you sure you want to delete..."*.<br>3. Click "OK". | Item is deleted. Total Spending and Category Breakdown decrement accordingly. |
-| **10** | **Logout & Session Invalidation** | 1. Click "Logout" button in navbar. | Redirects to `login.jsp` with logout message. Session is invalidated. |
-| **11** | **Unauthenticated Access Protection** | 1. After logout, attempt to access `http://localhost:8080/ExpenseTracker/index.jsp` or `/expenses`. | `AuthFilter` intercepts request and immediately redirects to `login.jsp`. |
-| **12** | **Browser Back-Button Test** | 1. After logout, press the browser Back button. | Browser does not show cached sensitive expense data due to no-cache response headers. |
-| **13** | **IDOR / URL Tampering Defense** | 1. Register and log in as `bob`.<br>2. Inspect HTML or construct POST to `/expenses` with `action=delete&id=<alice_expense_id>`. | Deletion fails. Bob cannot delete Alice's expense because the DAO strictly checks `WHERE id = ? AND user_id = ?`. |
+### Option B: Via Terminal Session
+If starting Tomcat directly from PowerShell:
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-27.0.1.0.3"
+$env:DB_URL = "jdbc:mysql://localhost:3306/personal_expense_tracker?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata"
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = "YOUR_MYSQL_PASSWORD"
+```
 
 ---
 
-## Assumptions Made
+## Build and Deployment
 
-1. **Tomcat & Servlet Specification:** Tomcat 10+ / 11 was detected in the environment (`C:\apache-tomcat-11.0.4`), and project facet indicates `jst.web 5.0` and `java 25`. Therefore, the standard `jakarta.servlet.*` package namespace was used along with Jakarta JSTL 3.0.
-2. **Database Port & Credentials:** Default MySQL configuration is assumed at `localhost:3306`, user `root`, password `root` (with explicit TODO comment for the user to edit their actual password in `DBConnection.java`).
-3. **Session Management:** Standard 30-minute HTTP cookie sessions with `HttpOnly` flags and server-side invalidation.
+### 1. Build the WAR with Maven
+In the root directory of the project:
+```powershell
+mvn clean package -DskipTests
+```
+This will compile the application and generate `target\personal-expense-tracker.war`.
+
+### 2. Deploy to Apache Tomcat
+Copy the WAR file into Tomcat's `webapps` directory:
+```powershell
+Copy-Item "target\personal-expense-tracker.war" "C:\apache-tomcat-11.0.4\webapps\personal-expense-tracker.war" -Force
+```
+
+### 3. Start Apache Tomcat
+From the Tomcat `bin` directory:
+```powershell
+& "C:\apache-tomcat-11.0.4\bin\catalina.bat" run
+```
+
+### 4. Access the Application
+Open your browser and navigate to:
+- **Registration:** [http://localhost:8080/personal-expense-tracker/register](http://localhost:8080/personal-expense-tracker/register)
+- **Login:** [http://localhost:8080/personal-expense-tracker/login](http://localhost:8080/personal-expense-tracker/login)
+- **Dashboard:** [http://localhost:8080/personal-expense-tracker/dashboard](http://localhost:8080/personal-expense-tracker/dashboard)
+
+---
+
+## Running in VS Code
+
+### Using Community Server Connectors (GUI)
+1. Install the extension **Community Server Connectors** (Red Hat) from the VS Code Marketplace.
+2. In the **Servers** panel on the left sidebar:
+   - Click **`+` (Add Server)** → Select **Apache Tomcat**.
+   - Choose your existing installation folder (e.g., `C:\apache-tomcat-11.0.4`).
+   - Select your JDK (17 or higher).
+3. Right-click the configured server → **Add Deployment...** → Select `target\personal-expense-tracker.war`.
+4. Right-click the server and choose **Start Server**.
+
+### Using VS Code Tasks
+Press `Ctrl + Shift + P` → select **Tasks: Run Task**:
+- `1 - Build WAR`: Compiles and packages the WAR.
+- `2 - Deploy WAR to Tomcat`: Copies the WAR to your specified Tomcat path.
+- `3 - Start Tomcat (current terminal)`: Launches Tomcat in the terminal.
+- `4 - Open application`: Launches the browser to the application URL.
+
+---
+
+## Suggested Demo Flow
+
+1. **Register:** Create a new account at `/register` to test BCrypt hashing and default category creation.
+2. **Add Income:** Log salary or freelance income at `/transactions` (e.g., ₹50,000).
+3. **Add Expenses:** Log several expenses across categories (e.g., Groceries ₹4,500, Utilities ₹2,200).
+4. **Set Monthly Budgets:** Navigate to `/budgets` to assign a spending target and view live progress bars.
+5. **Dashboard Analytics:**
+   - Review lifetime Total Balance and the side-by-side Total Income & Expenses cards.
+   - Inspect the **Cash Flow Line Graph** and data breakdown table.
+   - Inspect the **Spending Breakdown Pie Chart** and categorical summary list.
+   - Click the **Filter** button next to "Add transaction" to test date range, preset, and category filters.
+6. **Sign Out:** Sign out and sign in with a different user to verify complete session and data isolation.
+
+---
+
+## License & Notes
+- Developed for academic and personal portfolio demonstration.
+- Chart.js and Google Fonts require internet access to load from CDNs.
