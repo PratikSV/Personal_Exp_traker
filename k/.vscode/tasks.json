@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "1 - Build WAR",
+      "type": "shell",
+      "command": "mvn",
+      "args": ["clean", "package"],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "2 - Deploy WAR to Tomcat",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "$tomcat = Read-Host 'Enter Tomcat folder path'; if (!(Test-Path \"$tomcat\\webapps\")) { throw 'Tomcat webapps folder not found' }; Copy-Item 'target\\personal-expense-tracker.war' \"$tomcat\\webapps\\personal-expense-tracker.war\" -Force; Write-Host 'WAR copied. Stop and restart Tomcat if it was already running.'"],
+      "dependsOn": "1 - Build WAR",
+      "problemMatcher": []
+    },
+    {
+      "label": "3 - Start Tomcat (current terminal)",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoExit", "-NoProfile", "-Command", "$tomcat = Read-Host 'Enter Tomcat folder path'; Set-Location \"$tomcat\\bin\"; .\\catalina.bat run"],
+      "problemMatcher": []
+    },
+    {
+      "label": "4 - Open application",
+      "type": "shell",
+      "command": "cmd",
+      "args": ["/c", "start", "http://localhost:8080/personal-expense-tracker/login"],
+      "problemMatcher": []
+    }
+  ]
+}
