@@ -92,22 +92,26 @@
         </div>
     </section>
 
-    <!-- Financial Stats Summary -->
+    <!-- Financial Stats Summary (Always shows overall totals) -->
     <section class="stats">
         <article class="stat balance">
             <span>Total balance</span>
             <strong>₹ <c:out value="${balance}"/></strong>
-            <small><c:out value="${isFiltered ? 'Net result in selected filter' : 'Income minus expenses'}"/></small>
+            <small>Income minus expenses</small>
         </article>
-        <article class="stat">
-            <span>Total income</span>
-            <strong class="green">₹ <c:out value="${income}"/></strong>
-            <small><c:out value="${isFiltered ? 'Income in selected range' : 'All recorded income'}"/></small>
-        </article>
-        <article class="stat">
-            <span>Total expenses</span>
-            <strong class="red">₹ <c:out value="${expense}"/></strong>
-            <small><c:out value="${isFiltered ? 'Expenses in selected range' : 'All recorded spending'}"/></small>
+        <!-- Total Income & Total Expenses side by side in the same box -->
+        <article class="stat stat-split-box">
+            <div class="stat-half">
+                <span>Total income</span>
+                <strong class="green">+ ₹ <c:out value="${income}"/></strong>
+                <small>All recorded income</small>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-half">
+                <span>Total expenses</span>
+                <strong class="red">− ₹ <c:out value="${expense}"/></strong>
+                <small>All recorded spending</small>
+            </div>
         </article>
     </section>
 

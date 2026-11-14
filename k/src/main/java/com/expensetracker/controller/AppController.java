@@ -171,51 +171,22 @@ public class AppController {
 
         Long filterCategory = (categoryId != null && categoryId > 0) ? categoryId : null;
 
-        // 1. Calculate Income Total
-        BigDecimal income = BigDecimal.ZERO;
-        if (!"EXPENSE".equals(filterType)) {
-            StringBuilder incSql = new StringBuilder("SELECT COALESCE(SUM(amount), 0) FROM income WHERE user_id = ?");
-            List<Object> incParams = new ArrayList<>();
-            incParams.add(id);
-            if (start != null) {
-                incSql.append(" AND income_date >= ?");
-                incParams.add(start);
-            }
-            if (end != null) {
-                incSql.append(" AND income_date <= ?");
-                incParams.add(end);
-            }
-            income = db.queryForObject(incSql.toString(), BigDecimal.class, incParams.toArray());
-            if (income == null)
-                income = BigDecimal.ZERO;
-        }
+        // 1. Overall Account Totals (remain constant regardless of chart filters)
+        BigDecimal income = db.queryForObject(
+                "SELECT COALESCE(SUM(amount), 0) FROM income WHERE user_id = ?",
+                BigDecimal.class, id);
+        if (income == null)
+            income = BigDecimal.ZERO;
 
-        // 2. Calculate Expense Total
-        BigDecimal expense = BigDecimal.ZERO;
-        if (!"INCOME".equals(filterType)) {
-            StringBuilder expSql = new StringBuilder("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE user_id = ?");
-            List<Object> expParams = new ArrayList<>();
-            expParams.add(id);
-            if (start != null) {
-                expSql.append(" AND expense_date >= ?");
-                expParams.add(start);
-            }
-            if (end != null) {
-                expSql.append(" AND expense_date <= ?");
-                expParams.add(end);
-            }
-            if (filterCategory != null) {
-                expSql.append(" AND category_id = ?");
-                expParams.add(filterCategory);
-            }
-            expense = db.queryForObject(expSql.toString(), BigDecimal.class, expParams.toArray());
-            if (expense == null)
-                expense = BigDecimal.ZERO;
-        }
+        BigDecimal expense = db.queryForObject(
+                "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE user_id = ?",
+                BigDecimal.class, id);
+        if (expense == null)
+            expense = BigDecimal.ZERO;
 
         BigDecimal balance = income.subtract(expense);
 
-        // 3. Cash Flow Timeline (Line Graph)
+        // 2. Cash Flow Timeline (Line Graph - filtered by date, type, category)
         boolean groupByDay = false;
         if (start != null && end != null && ChronoUnit.DAYS.between(start, end) <= 31) {
             groupByDay = true;
