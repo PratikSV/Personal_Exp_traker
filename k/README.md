@@ -1,6 +1,7 @@
 # Pennywise — Personal Expense Tracker
 
-A modern, responsive Java web application built with **JDK 17**, Spring MVC 6, Spring JDBC, JSP/JSTL (Jakarta EE), MySQL 8, and Chart.js. This is a traditional Maven WAR web application designed for **Apache Tomcat 10.1 / 11.0+** (not Spring Boot).
+A modern, responsive Java web application built with **JDK 17**, Spring MVC 6, Spring JDBC, JSP/JSTL (Jakarta EE), MySQL 8, and Chart.js. This is a traditional Maven WAR web application designed for **Apache Tomcat 10.1 / 11.0+** (not Spring Boot). 
+tomcat path: C:\apache-tomcat-11.0.4
 
 ---
 

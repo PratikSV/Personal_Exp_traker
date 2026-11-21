@@ -1,6 +1,11 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
+<%@ page import="java.time.YearMonth, java.time.ZoneId" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <%@ include file="nav.jspf" %>
+<%
+    // Current month in YYYY-MM format (what <input type="month"> expects)
+    request.setAttribute("currentMonth", YearMonth.now(ZoneId.of("Asia/Kolkata")).toString());
+%>
 <!DOCTYPE html>
 <html lang="en">
     <head>
@@ -21,56 +26,88 @@
 
             <section class="panel">
                 <h2>Create or update a budget</h2>
-                <form class="transaction-form" method="post" action="${ctx}/budget/save">
+                <form id="budgetForm" class="transaction-form" method="post" action="${ctx}/budget/save">
                     <input type="hidden" name="csrfToken" value="${csrf}">
-                    <label>Budget name
-                    <input name="name" maxlength="120" required placeholder="e.g. Food budget">
-                </label>
-                <label>Category
-                <select name="categoryId" required>
-                    <c:forEach items="${categories}" var="c">
-                        <option value="${c.category_id}"><c:out value="${c.category_name}"/></option>
-                    </c:forEach>
-                </select>
-            </label>
-            <label>Monthly limit (₹)
-            <input name="amount" type="number" min="0.01" step="0.01" required>
-        </label>
-        <label>Month
-        <input name="month" type="month" required>
-    </label>
-    <button class="btn primary">Save budget</button>
-</form>
-</section>
 
-<section class="budget-grid">
-    <c:forEach items="${budgets}" var="b">
-        <article class="panel budget-card">
-            <div class="panel-head">
-                <div>
-                    <h2><c:out value="${b.budget_name}"/></h2>
-                    <p class="muted"><c:out value="${b.budget_month}"/></p>
-                </div>
-                <form method="post" action="${ctx}/budget/delete">
-                    <input type="hidden" name="csrfToken" value="${csrf}">
-                    <input type="hidden" name="id" value="${b.budget_id}">
-                    <button class="text-button">Remove</button>
+                    <label>Budget name
+                        <input name="name" maxlength="120" required placeholder="e.g. Food budget">
+                    </label>
+
+                    <label>Category
+                        <select name="categoryId" required>
+                            <c:forEach items="${categories}" var="c">
+                                <option value="${c.category_id}"><c:out value="${c.category_name}"/></option>
+                            </c:forEach>
+                        </select>
+                    </label>
+
+                    <label>Monthly limit (₹)
+                        <input name="amount" type="number" min="0.01" step="0.01" required>
+                    </label>
+
+                    <label>Month
+                        <input id="budgetMonth" name="month" type="month" required
+                               min="${currentMonth}" value="${currentMonth}">
+                    </label>
+
+                    <button class="btn primary">Save budget</button>
                 </form>
-            </div>
-            <div class="budget-numbers">
-                <strong>₹ <c:out value="${b.spent}"/></strong>
-                <span>of ₹ <c:out value="${b.amount}"/></span>
-            </div>
-            <div class="progress">
-                <span style="width:${b.amount gt 0 ? (b.spent / b.amount * 100) : 0}%"></span>
-            </div>
-            <p class="muted tiny">Spent against your monthly limit</p>
-        </article>
-    </c:forEach>
-    <c:if test="${empty budgets}">
-        <div class="panel empty">No budgets created yet. Add your first monthly budget above.</div>
-    </c:if>
-</section>
-</main>
-</body>
+            </section>
+
+            <section class="budget-grid">
+                <c:forEach items="${budgets}" var="b">
+                    <article class="panel budget-card">
+                        <div class="panel-head">
+                            <div>
+                                <h2><c:out value="${b.budget_name}"/></h2>
+                                <p class="muted"><c:out value="${b.budget_month}"/></p>
+                            </div>
+                            <form method="post" action="${ctx}/budget/delete">
+                                <input type="hidden" name="csrfToken" value="${csrf}">
+                                <input type="hidden" name="id" value="${b.budget_id}">
+                                <button class="text-button">Remove</button>
+                            </form>
+                        </div>
+                        <div class="budget-numbers">
+                            <strong>₹ <c:out value="${b.spent}"/></strong>
+                            <span>of ₹ <c:out value="${b.amount}"/></span>
+                        </div>
+                        <div class="progress">
+                            <span style="width:${b.amount gt 0 ? (b.spent / b.amount * 100) : 0}%"></span>
+                        </div>
+                        <p class="muted tiny">Spent against your monthly limit</p>
+                    </article>
+                </c:forEach>
+                <c:if test="${empty budgets}">
+                    <div class="panel empty">No budgets created yet. Add your first monthly budget above.</div>
+                </c:if>
+            </section>
+        </main>
+        <script>
+            (function () {
+                var form = document.getElementById('budgetForm');
+                var monthInput = document.getElementById('budgetMonth');
+                var minMonth = monthInput.min; // e.g. "2026-11"
+
+                function check() {
+                    // String compare works because format is YYYY-MM
+                    if (monthInput.value && monthInput.value < minMonth) {
+                        monthInput.setCustomValidity('You cannot select a past month.');
+                    } else {
+                        monthInput.setCustomValidity('');
+                    }
+                }
+
+                monthInput.addEventListener('input', check);
+                monthInput.addEventListener('change', check);
+                form.addEventListener('submit', function (e) {
+                    check();
+                    if (!form.checkValidity()) {
+                        e.preventDefault();
+                        form.reportValidity();
+                    }
+                });
+            })();
+        </script>
+    </body>
 </html>
